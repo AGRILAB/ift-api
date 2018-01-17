@@ -1,0 +1,413 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>fr.gouv.agriculture</groupId>
+    <artifactId>ift-api</artifactId>
+    <version>0.10.2.ctrl-SNAPSHOT</version>
+    <packaging>war</packaging>
+
+    <name>ift-api</name>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>1.4.4.RELEASE</version>
+        <relativePath /> <!-- lookup parent from repository -->
+    </parent>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <java.version>1.8</java.version>
+        <snippetsDirectory>${project.build.directory}/generated-snippets</snippetsDirectory>
+
+        <springfox-swagger2.version>2.7.0</springfox-swagger2.version>
+        <spring-restdocs-mockmvc.version>1.1.2.RELEASE</spring-restdocs-mockmvc.version>
+        <jjwt.version>0.6.0</jjwt.version>
+        <geojson-jackson.version>1.8</geojson-jackson.version>
+        <feign.version>9.4.0</feign.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- JSON Serialization for LocalDate and LocalDateTime as RFC String -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+        </dependency>
+
+        <!-- Security -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- Spring Security OAuth -->
+        <dependency>
+            <groupId>org.springframework.security.oauth</groupId>
+            <artifactId>spring-security-oauth2</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt</artifactId>
+            <version>${jjwt.version}</version>
+        </dependency>
+
+        <!-- REST Client -->
+        <dependency>
+            <groupId>io.github.openfeign</groupId>
+            <artifactId>feign-core</artifactId>
+            <version>${feign.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.github.openfeign</groupId>
+            <artifactId>feign-jackson</artifactId>
+            <version>${feign.version}</version>
+        </dependency>
+
+        <!-- Data -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+
+        <!-- Flyway -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+
+        <!-- Databases -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Lombok -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- REST Documentation API -->
+        <dependency>
+            <groupId>io.springfox</groupId>
+            <artifactId>springfox-swagger2</artifactId>
+            <version>${springfox-swagger2.version}</version>
+            <scope>compile</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.springfox</groupId>
+            <artifactId>springfox-swagger-ui</artifactId>
+            <version>${springfox-swagger2.version}</version>
+            <scope>compile</scope>
+        </dependency>
+
+        <!-- Tests -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.restdocs</groupId>
+            <artifactId>spring-restdocs-mockmvc</artifactId>
+            <version>${spring-restdocs-mockmvc.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+        </dependency>
+
+        <!-- Commons-io -->
+        <dependency>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
+            <version>2.5</version>
+        </dependency>
+
+        <!-- CAS Security for EAP login -->
+        <dependency>
+            <groupId>org.jasig.cas.client</groupId>
+            <artifactId>cas-client-core</artifactId>
+            <version>3.3.3</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcprov-jdk15</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+    </dependencies>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>Camden.RELEASE</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <scm>
+        <developerConnection>scm:git:http://orion-exp-git-1.zsi.agri/agrilab/ift-api.git</developerConnection>
+        <tag>ift-api-0.8.ctrl</tag>
+    </scm>
+
+    <distributionManagement>
+        <repository>
+            <id>Project</id>
+            <name>Maven Repository</name>
+            <url>dav:https://repos.forge.agriculture/repository/ift-work</url>
+        </repository>
+
+        <snapshotRepository>
+            <id>Work</id>
+            <name>Maven Internal Repository</name>
+            <url>dav:https://repos.forge.agriculture/repository/ift-work</url>
+        </snapshotRepository>
+    </distributionManagement>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <includes>
+                        <include>**/*Test.java</include>
+                    </includes>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.asciidoctor</groupId>
+                <artifactId>asciidoctor-maven-plugin</artifactId>
+                <version>1.5.2</version>
+                <executions>
+                    <execution>
+                        <id>generate-docs</id>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>process-asciidoc</goal>
+                        </goals>
+                        <configuration>
+                            <backend>html</backend>
+                            <doctype>book</doctype>
+                            <attributes>
+                                <snippets>${snippetsDirectory}</snippets>
+                            </attributes>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Disable javadoc generation -->
+            <plugin>
+                <artifactId>maven-release-plugin</artifactId>
+                <version>2.5.2</version>
+                <configuration>
+                    <arguments>-Dmaven.javadoc.skip=true</arguments>
+                </configuration>
+            </plugin>
+
+            <!-- Tomcat plugin -->
+            <plugin>
+                <groupId>org.apache.tomcat.maven</groupId>
+                <artifactId>tomcat7-maven-plugin</artifactId>
+                <version>2.2</version>
+                <configuration>
+                    <url>${tomcat.url}</url>
+                    <server>TomcatServer</server>
+                    <username>${tomcat.user}</username>
+                    <password>${tomcat.password}</password>
+                </configuration>
+            </plugin>
+        </plugins>
+
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+        </resources>
+
+        <!--
+           *******************************************************************
+           Extensions. Activation du protocole WebDav. Normalement Maven 2.1.0
+           dispose du support en natif, mais des problèmes ont été constat2s en
+           fonction de la version du wagon utilisé. On force celle qui
+           fonctionne avec Archiva, parce que ce n'est pas la dernière
+           disponible (et que les plus récentes posent soucis).
+           *******************************************************************
+        -->
+        <extensions>
+            <extension>
+                <groupId>org.apache.maven.wagon</groupId>
+                <artifactId>wagon-webdav</artifactId>
+                <version>1.0-beta-2</version>
+            </extension>
+        </extensions>
+
+    </build>
+
+    <profiles>
+        <!-- Profil de l'environnement de développement local -->
+        <profile>
+            <id>local</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+
+            <properties>
+                <tomcat.url>http://localhost:8080/manager/text</tomcat.url>
+                <tomcat.user>tomcat</tomcat.user>
+                <tomcat.password>secret</tomcat.password>
+            </properties>
+
+            <build>
+                <resources>
+                    <resource>
+                        <filtering>false</filtering>
+                        <directory>
+                            src/main/config/env/local
+                        </directory>
+                        <includes>
+                            <include>*.properties</include>
+                            <include>db/migration/*.sql</include>
+                        </includes>
+                    </resource>
+                </resources>
+            </build>
+        </profile>
+
+        <!-- Profil de l'environnement de CTRL -->
+        <profile>
+            <id>ctrl</id>
+            <build>
+                <resources>
+                    <resource>
+                        <filtering>false</filtering>
+                        <directory>
+                            src/main/config/env/ctrl
+                        </directory>
+                        <includes>
+                            <include>*.properties</include>
+                            <include>db/migration/*.sql</include>
+                        </includes>
+                    </resource>
+                </resources>
+            </build>
+        </profile>
+
+        <!-- Profil de l'environnement PPRD -->
+        <profile>
+            <id>pprd</id>
+            <build>
+                <resources>
+                    <resource>
+                        <filtering>false</filtering>
+                        <directory>
+                            src/main/config/env/private/pprd
+                        </directory>
+                        <includes>
+                            <include>*.properties</include>
+                            <include>db/migration/*.sql</include>
+                        </includes>
+                    </resource>
+                </resources>
+            </build>
+            <distributionManagement>
+                <repository>
+                    <id>Project</id>
+                    <name>Maven Repository</name>
+                    <url>dav:https://repos.forge.agriculture/repository/ift-private</url>
+                </repository>
+
+                <snapshotRepository>
+                    <id>Work</id>
+                    <name>Maven Internal Repository</name>
+                    <url>dav:https://repos.forge.agriculture/repository/ift-private</url>
+                </snapshotRepository>
+            </distributionManagement>
+        </profile>
+
+        <!-- Profil de l'environnement de production -->
+        <profile>
+            <id>prod</id>
+            <build>
+                <resources>
+                    <resource>
+                        <filtering>false</filtering>
+                        <directory>
+                            src/main/config/env/private/prod
+                        </directory>
+                        <includes>
+                            <include>*.properties</include>
+                            <include>db/migration/*.sql</include>
+                        </includes>
+                    </resource>
+                </resources>
+            </build>
+            <distributionManagement>
+                <repository>
+                    <id>Project</id>
+                    <name>Maven Repository</name>
+                    <url>dav:https://repos.forge.agriculture/repository/ift-private</url>
+                </repository>
+
+                <snapshotRepository>
+                    <id>Work</id>
+                    <name>Maven Internal Repository</name>
+                    <url>dav:https://repos.forge.agriculture/repository/ift-private</url>
+                </snapshotRepository>
+            </distributionManagement>
+        </profile>
+
+        <profile>
+            <id>docker</id>
+            <build>
+                <resources>
+                    <resource>
+                        <filtering>false</filtering>
+                        <directory>
+                            src/main/config/env/docker
+                        </directory>
+                        <includes>
+                            <include>*.properties</include>
+                            <include>db/migration/*.sql</include>
+                        </includes>
+                    </resource>
+                </resources>
+            </build>
+        </profile>
+    </profiles>
+
+</project>
