@@ -1,6 +1,8 @@
 package fr.gouv.agriculture.ift.service.impl;
 
+import fr.gouv.agriculture.ift.controller.csv.ProduitCSV;
 import fr.gouv.agriculture.ift.controller.form.ProduitForm;
+import fr.gouv.agriculture.ift.exception.ConflictException;
 import fr.gouv.agriculture.ift.exception.InvalidParameterException;
 import fr.gouv.agriculture.ift.exception.NotFoundException;
 import fr.gouv.agriculture.ift.model.*;
@@ -9,10 +11,11 @@ import fr.gouv.agriculture.ift.repository.NumeroAmmRepository;
 import fr.gouv.agriculture.ift.repository.ProduitRepository;
 import fr.gouv.agriculture.ift.repository.ValiditeProduitRepository;
 import fr.gouv.agriculture.ift.service.ProduitService;
+import fr.gouv.agriculture.ift.util.CsvUtils;
 import fr.gouv.agriculture.ift.util.StringHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.annotation.Cacheable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -60,18 +63,24 @@ public class ProduitServiceImpl implements ProduitService {
             throw new InvalidParameterException("Le paramètre campagneIdMetier est requis lorsque cultureIdMetier ou cibleIdMetier sont renseignés");
         }
 
+        List<Produit> produits;
         if (!StringUtils.isEmpty(campagneIdMetier) ||
                 !StringUtils.isEmpty(cultureIdMetier) ||
                 !StringUtils.isEmpty(cibleIdMetier)) {
-            return findProduitsByCampagneAndOrCultureAndOrCible(campagneIdMetier, cultureIdMetier, cibleIdMetier, filter, pageable);
+            produits = findProduitsByCampagneAndOrCultureAndOrCible(campagneIdMetier, cultureIdMetier, cibleIdMetier, filter, pageable);
         } else if (!StringUtils.isEmpty(filter)){
-            return findAllProduits(filter, pageable);
+            produits = findAllProduits(filter, pageable);
         } else {
-            return findAllProduits(pageable);
+            produits = findAllProduits(pageable);
         }
+
+        if (produits.size() == 0){
+            throw new NotFoundException();
+        }
+        return produits;
+
     }
 
-    @Cacheable(key = "#root.methodName")
     private List<Produit> findAllCultures() {
         log.debug("Get All Cultures");
         return repository.findAll(SORT);
@@ -98,29 +107,39 @@ public class ProduitServiceImpl implements ProduitService {
         return queryProduits(campagneIdMetier, cultureIdMetier, cibleIdMetier, filtre, pageable);
     }
 
+    @Override
+    public String findProduitsByCampagneAsCSV(String campagneIdMetier) {
+        List<ValiditeProduit> validitesProduit = validiteProduitRepository.findByCampagneIdMetier(campagneIdMetier);
+        return CsvUtils.writeAsCSV(ProduitCSV.class, ProduitCSV.toCsvDTO(validitesProduit).toArray());
+    }
+
     private List<Produit> queryProduits(String campagneIdMetier, String cultureIdMetier, String cibleIdMetier, String filtre, Pageable pageable) {
 
         CriteriaBuilder builder = entityManager.getCriteriaBuilder();
         CriteriaQuery<Produit> query = builder.createQuery(Produit.class);
-        Root<ProduitDoseReference> root = query.from(ProduitDoseReference.class);
+        Root<Produit> fromProduit = query.from(Produit.class);
 
-        DoseReferencePredicateBuilder predicateBuilder = new DoseReferencePredicateBuilder(builder, root);
-        Predicate predicate = predicateBuilder.appendPredicate(builder.conjunction(), campagneIdMetier, null, cultureIdMetier, cibleIdMetier);
+        Subquery doseRefQuery = query.subquery(ProduitDoseReference.class);
+        Root<DoseReference> fromDoseRef = doseRefQuery.from(ProduitDoseReference.class);
 
-        Path<Produit> produitType = root.get("produit");
-        Path<String> libellePath = produitType.get("libelle");
-        Path<String> normalizedLibellePath = produitType.get("normalizedLibelle");
+        DoseReferencePredicateBuilder predicateBuilder = new DoseReferencePredicateBuilder(builder, fromDoseRef);
+        Predicate doseRefPredicate = predicateBuilder.appendPredicate(builder.conjunction(), campagneIdMetier, null, cultureIdMetier, cibleIdMetier);
+
+        doseRefQuery.select(fromDoseRef.get("produit"));
+        doseRefQuery.where(doseRefPredicate);
+
+        Predicate produitPredicate = builder.in(fromProduit.get("id")).value(doseRefQuery);
+        Path<String> libellePath = fromProduit.get("libelle");
+        Path<String> normalizedLibellePath = fromProduit.get("normalizedLibelle");
 
         if (!StringUtils.isEmpty(filtre)){
             String normalizedFilter = StringHelper.normalizeTerm(filtre);
             Predicate filterPredicate = builder.or(builder.like(normalizedLibellePath, normalizedFilter + '%'),
                     builder.like(normalizedLibellePath, "% " + normalizedFilter + "%"));
-            predicate = builder.and(predicate, filterPredicate);
+            produitPredicate = builder.and(produitPredicate, filterPredicate);
         }
 
-        query.where(predicate);
-
-        query.select(produitType).distinct(true);
+        query.where(produitPredicate);
         query.orderBy(builder.asc(libellePath));
 
         TypedQuery<Produit> typedQuery = entityManager.createQuery(query);
@@ -137,7 +156,13 @@ public class ProduitServiceImpl implements ProduitService {
 
         List<ValiditeProduit> validitesProduit = validiteProduitRepository.findByProduitLibelleAndCampagneIdMetier(produitLibelle, campagneIdMetier);
 
-        return validitesProduit.stream().map(validiteProduit -> validiteProduit.getNumeroAmm()).collect(Collectors.toList());
+        List<NumeroAmm> numerosAmm = validitesProduit.stream().map(ValiditeProduit::getNumeroAmm).collect(Collectors.toList());
+
+        if (numerosAmm.size() == 0){
+            throw new NotFoundException();
+        }
+
+        return numerosAmm;
     }
 
     @Override
@@ -170,25 +195,18 @@ public class ProduitServiceImpl implements ProduitService {
     @Override
     public Produit save(ProduitForm produitForm) {
         Produit newProduit = ProduitForm.mapToProduit(produitForm);
-        return save(newProduit);
-    }
-
-    private Produit save(Produit produit) {
-        Produit found = repository.findByLibelle(produit.getLibelle());
+        Produit found = repository.findByLibelle(newProduit.getLibelle());
 
         if (found == null) {
-            produit.setId(UUID.randomUUID());
-            log.debug("Create Produit: {}", produit);
+            newProduit.setId(UUID.randomUUID());
+            log.debug("Create Produit: {}", newProduit);
         } else {
-            produit.setId(found.getId());
-            produit.setDateCreation(found.getDateCreation());
-            produit.setDateDerniereMaj(LocalDateTime.now());
-            log.debug("Update Produit: {}", produit);
+            throw newConflictException(newProduit);
         }
 
-        produit.setNormalizedLibelle(StringHelper.normalizeTerm(produit.getLibelle()));
+        newProduit.setNormalizedLibelle(StringHelper.normalizeTerm(newProduit.getLibelle()));
 
-        return repository.save(produit);
+        return repository.save(newProduit);
     }
 
     @Override
@@ -204,7 +222,12 @@ public class ProduitServiceImpl implements ProduitService {
             produit.setDateDerniereMaj(LocalDateTime.now());
             produit.setNormalizedLibelle(StringHelper.normalizeTerm(produit.getLibelle()));
             log.debug("Update Produit: {}", produit);
-            return repository.save(produit);
+
+            try{
+                return repository.save(produit);
+            } catch (DataIntegrityViolationException e) {
+                throw newConflictException(produit);
+            }
         }
     }
 
@@ -220,7 +243,7 @@ public class ProduitServiceImpl implements ProduitService {
     }
 
     @Override
-    public List<ValiditeProduit> addProduits(Campagne campagne, InputStream inputStream) {
+    public String addProduits(Campagne campagne, InputStream inputStream) {
         try {
             InputStreamReader inputStreamReader = new InputStreamReader(inputStream, StandardCharsets.UTF_8);
             BufferedReader bufferedReader = new BufferedReader(inputStreamReader);
@@ -228,6 +251,7 @@ public class ProduitServiceImpl implements ProduitService {
             String[] splitData = crunchifyLine.split("\\t");
             Map<String, Integer> columns = new HashMap<>();
             for (int i = 0; i < splitData.length; i++) {
+                splitData[i] = StringHelper.removeDoubleQuotes(splitData[i]);
                 switch (splitData[i]) {
                     case nomProduit:
                         columns.put(nomProduit, i);
@@ -245,7 +269,8 @@ public class ProduitServiceImpl implements ProduitService {
                 ValiditeProduit validiteProduit = crunchifyCSVtoArrayList(campagne, crunchifyLine, columns);
                 validiteProduits.add(validiteProduit);
             }
-            return validiteProduitRepository.save(validiteProduits);
+            List<ValiditeProduit> validiteProduitList = validiteProduitRepository.save(validiteProduits);
+            return validiteProduitList.size() + " produits ont été ajoutés.\n";
         } catch (IOException e) {
             e.printStackTrace();
             return null;
@@ -257,12 +282,12 @@ public class ProduitServiceImpl implements ProduitService {
         if (crunchifyCSV != null) {
             String[] splitData = crunchifyCSV.split("\\t");
 
-            Produit produit = repository.findByLibelle(splitData[columns.get(nomProduit)]);
+            Produit produit = repository.findByLibelle(StringHelper.removeDoubleQuotes(splitData[columns.get(nomProduit)]));
             if (produit == null) {
                 produit = Produit.builder()
                         .id(UUID.randomUUID())
-                        .libelle(splitData[columns.get(nomProduit)])
-                        .normalizedLibelle(StringHelper.normalizeTerm(splitData[columns.get(nomProduit)]))
+                        .libelle(StringHelper.removeDoubleQuotes(splitData[columns.get(nomProduit)]))
+                        .normalizedLibelle(StringHelper.normalizeTerm(StringHelper.removeDoubleQuotes(splitData[columns.get(nomProduit)])))
                         .build();
                 produit = repository.save(produit);
             }else {
@@ -270,11 +295,11 @@ public class ProduitServiceImpl implements ProduitService {
                 produit = repository.save(produit);
             }
 
-            NumeroAmm numeroAmm = numeroAmmRepository.findNumeroAmmByIdMetier(splitData[columns.get(amm)]);
+            NumeroAmm numeroAmm = numeroAmmRepository.findNumeroAmmByIdMetier(StringHelper.removeDoubleQuotes(splitData[columns.get(amm)]));
             if (numeroAmm == null) {
                 numeroAmm = NumeroAmm.builder()
                         .id(UUID.randomUUID())
-                        .idMetier(splitData[columns.get(amm)])
+                        .idMetier(StringHelper.removeDoubleQuotes(splitData[columns.get(amm)]))
                         .build();
                 numeroAmm = numeroAmmRepository.save(numeroAmm);
             }
@@ -291,10 +316,15 @@ public class ProduitServiceImpl implements ProduitService {
         return null;
     }
 
+
     @Transactional
     @Override
     public void deleteValiditeProduitByCampagne(Campagne campagne) {
         validiteProduitRepository.deleteByCampagneId(campagne.getId());
+    }
+
+    private ConflictException newConflictException(Produit produit){
+        return new ConflictException("Le produit " + produit.getLibelle() + " existe déjà.");
     }
 
 }

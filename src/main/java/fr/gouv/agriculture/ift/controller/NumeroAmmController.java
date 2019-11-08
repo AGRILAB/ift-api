@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,7 +19,7 @@ import java.util.List;
 @Slf4j
 @RestController
 @RequestMapping(value = Constants.API_NUMEROS_AMM_ROOT, produces = MediaType.APPLICATION_JSON_VALUE)
-@Api(tags = { Constants.NUMEROS_AMM }, description = "Ressources sur les numéros AMM")
+@Api(tags = { Constants.NUMEROS_AMM }, description = "Référentiel des numéros AMM (Autorisations de Mise sur le Marché)")
 public class NumeroAmmController {
 
     @Autowired
@@ -26,13 +27,14 @@ public class NumeroAmmController {
 
     @ApiOperation(value = "findAllNumerosAmm", notes = "Retourne la liste des numéros AMM")
     @ApiImplicitParams({
-            @ApiImplicitParam(name = "page", dataType = "integer", paramType = "query",
+            @ApiImplicitParam(name = "page", dataType = "int", paramType = "query",
                     value = "Page de résultats à récupérer (0 par défaut)."),
-            @ApiImplicitParam(name = "size", dataType = "integer", paramType = "query",
-                    value = "Nombre de résultats par page (200 par défaut).")
+            @ApiImplicitParam(name = "size", dataType = "int", paramType = "query",
+                    value = "Nombre de résultats par page (200 par défaut, max 2000).")
     })
     @JsonView(Views.Public.class)
     @GetMapping
+    @ResponseStatus(code = HttpStatus.PARTIAL_CONTENT)
     public List<NumeroAmm> findAllNumerosAmm(@ApiParam(value = "Identifiant de la campagne")
                                                  @RequestParam(value = "campagneIdMetier", required = false) String campagneIdMetier,
                                              @ApiParam(value = "Identifiant de la culture")
@@ -46,6 +48,9 @@ public class NumeroAmmController {
     }
 
     @ApiOperation(value = "findNumeroAmmByIdMetier", notes = "Retourne le numéro Amm par son identifiant métier")
+    @ApiResponses(value = {
+            @ApiResponse(code = 404, message = "Not Found")
+    })
     @JsonView(Views.Public.class)
     @GetMapping("/{numeroAmmIdMetier}")
     public NumeroAmm findNumeroAmmById(@ApiParam(value = "Identifiant du numéro AMM", required = true)

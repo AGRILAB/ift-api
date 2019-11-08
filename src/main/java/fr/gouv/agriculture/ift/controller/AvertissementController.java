@@ -19,7 +19,7 @@ import java.util.List;
 @Slf4j
 @RestController
 @RequestMapping(value = Constants.API_AVERTISSEMENTS_ROOT, produces = MediaType.APPLICATION_JSON_VALUE)
-@Api(tags = {Constants.AVERTISSEMENTS}, description = "Ressources sur les avertissements")
+@Api(tags = {Constants.AVERTISSEMENTS}, description = "Référentiel des avertissements expliquant le résultat d'un calcul d'IFT")
 public class AvertissementController {
 
     @Autowired

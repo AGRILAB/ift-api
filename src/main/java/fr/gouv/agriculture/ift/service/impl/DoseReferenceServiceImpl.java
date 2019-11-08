@@ -1,6 +1,8 @@
 package fr.gouv.agriculture.ift.service.impl;
 
+import fr.gouv.agriculture.ift.controller.csv.DoseReferenceCSV;
 import fr.gouv.agriculture.ift.controller.form.DoseReferenceForm;
+import fr.gouv.agriculture.ift.exception.ConflictException;
 import fr.gouv.agriculture.ift.exception.InvalidParameterException;
 import fr.gouv.agriculture.ift.exception.NotFoundException;
 import fr.gouv.agriculture.ift.model.*;
@@ -9,11 +11,15 @@ import fr.gouv.agriculture.ift.repository.DoseReferencePredicateBuilder;
 import fr.gouv.agriculture.ift.repository.DoseReferenceRepository;
 import fr.gouv.agriculture.ift.repository.NumeroAmmRepository;
 import fr.gouv.agriculture.ift.service.*;
+import fr.gouv.agriculture.ift.util.CsvUtils;
+import fr.gouv.agriculture.ift.util.StringHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StopWatch;
 import org.springframework.util.StringUtils;
 
 import javax.persistence.EntityManager;
@@ -48,6 +54,9 @@ public class DoseReferenceServiceImpl implements DoseReferenceService {
     private CultureService cultureService;
 
     @Autowired
+    private GroupeCulturesService groupeCulturesService;
+
+    @Autowired
     private CibleService cibleService;
 
     @Autowired
@@ -74,16 +83,9 @@ public class DoseReferenceServiceImpl implements DoseReferenceService {
     }
 
     @Override
-    public List<DoseReference> findAllDosesReference(Pageable pageable) {
-        log.debug("Get All DosesReference");
-        return pageable == null ? repository.findAll() : repository.findAll(pageable).getContent();
-    }
-
-
-    @Override
     public List<DoseReference> findDosesReference(String campagneIdMetier,
                                                   String cultureIdMetier,
-                                                  String numeroAmmIdMetier,
+                                                  String[] numeroAmmIdMetier,
                                                   String cibleIdMetier,
                                                   TypeDoseReference typeDoseReference) {
 
@@ -95,16 +97,21 @@ public class DoseReferenceServiceImpl implements DoseReferenceService {
     @Override
     public List<DoseReference> findDosesReference(String campagneIdMetier,
                                                   String cultureIdMetier,
-                                                  String numeroAmmIdMetier,
+                                                  String[] numeroAmmIdMetier,
                                                   String cibleIdMetier,
                                                   TypeDoseReference typeDoseReference,
                                                   Pageable pageable) {
         log.debug("Get pageable DosesReference by campagneIdMetier: {}, cultureIdMetier: {}, numeroAmmIdMetier: {}, cibleIdMetier: {}, typeDoseReference: {}",
                 campagneIdMetier, cultureIdMetier, numeroAmmIdMetier, cibleIdMetier, typeDoseReference);
-        return queryDosesReference(campagneIdMetier, cultureIdMetier, numeroAmmIdMetier, cibleIdMetier, typeDoseReference, pageable);
+        List<DoseReference> doseReferences = queryDosesReference(campagneIdMetier, cultureIdMetier, numeroAmmIdMetier, cibleIdMetier, typeDoseReference, pageable);
+
+        if (doseReferences.size() == 0){
+            throw new NotFoundException();
+        }
+        return doseReferences;
     }
 
-    private List<DoseReference> queryDosesReference(String campagneIdMetier, String cultureIdMetier, String numeroAmmIdMetier, String cibleIdMetier, TypeDoseReference typeDoseReference, Pageable pageable){
+    private List<DoseReference> queryDosesReference(String campagneIdMetier, String cultureIdMetier, String[] numeroAmmIdMetier, String cibleIdMetier, TypeDoseReference typeDoseReference, Pageable pageable){
         CriteriaBuilder builder = entityManager.getCriteriaBuilder();
         CriteriaQuery<DoseReference> query = builder.createQuery(DoseReference.class);
         Root<DoseReference> root = query.from(DoseReference.class);
@@ -133,15 +140,44 @@ public class DoseReferenceServiceImpl implements DoseReferenceService {
     }
 
     @Override
-    public DoseReference findDoseReferenceByCampagneAndCultureAndNumeroAmmAndCible(String campagneIdMetier, String cultureIdMetier, String numeroAmmIdMetier, String cibleIdMetier) {
-        DoseReference found = repository.findOneDoseReferenceByCampagneIdMetierAndNumeroAmmIdMetierAndCultureIdMetierAndCibleIdMetier(campagneIdMetier, numeroAmmIdMetier, cultureIdMetier, cibleIdMetier);
+    public DoseReference findDoseReferenceByCampagneAndCultureAndNumeroAmmAndCible(Campagne campagne, Culture culture, NumeroAmm numeroAmm, Cible cible) {
+        DoseReference found = repository.findOneDoseReferenceByCampagneIdAndNumeroAmmIdAndCultureIdAndCibleId(
+                campagne.getId(),
+                numeroAmm.getId(),
+                culture.getId(),
+                cible != null ? cible.getId() : null);
 
         if (found == null) {
-            log.debug("La dose de référence n'existe pas pour les critères campagneIdMetier: {}, cultureIdMetier: {}, numeroAmmIdMetier: {}, cibleIdMetier: {}", campagneIdMetier, cultureIdMetier, numeroAmmIdMetier, cibleIdMetier);
+            log.debug("La dose de référence n'existe pas pour les critères campagne: {}, culture: {}, numeroAmm: {}, cible: {}",
+                    campagne.getIdMetier(), culture.getIdMetier(), numeroAmm.getIdMetier(), cible != null ? cible.getIdMetier() : null);
             throw new NotFoundException();
         } else {
             return found;
         }
+    }
+    
+    @Override
+    public DoseReference findDoseReferenceByCampagneAndCultureAndNumeroAmm(Campagne campagne, Culture culture, NumeroAmm numeroAmm) {
+        DoseReference found = repository.findOneDoseReferenceByCampagneIdAndNumeroAmmIdAndCultureId(
+                campagne.getId(),
+                numeroAmm.getId(),
+                culture.getId());
+        // TODO becarefull, NotUniqueExeption will be thrown if multiple DoseReference found for campagne * numeroamm * culture
+        if (found == null) {
+            log.debug("La dose de référence n'existe pas pour les critères campagne: {}, culture: {}, numeroAmm: {}",
+                    campagne.getIdMetier(), culture.getIdMetier(), numeroAmm.getIdMetier());
+            throw new NotFoundException();
+        } else {
+            return found;
+        }
+    }
+
+    @Override
+    public String findDosesReferenceByCampagneAndGroupeCulturesAsCSV(String campagneIdMetier, String groupeCulturesIdMetier) {
+        Campagne campagne = campagneService.findCampagneByIdMetier(campagneIdMetier);
+        GroupeCultures groupeCultures = groupeCulturesService.findGroupeCulturesByIdMetier(groupeCulturesIdMetier);
+        List<DoseReference> dosesReference = repository.findDoseReferenceByCampagneIdAndCulture_GroupeCulturesId(campagne.getId(), groupeCultures.getId());
+        return CsvUtils.writeAsCSV(DoseReferenceCSV.class, DoseReferenceCSV.toCsvDTO(dosesReference).toArray());
     }
     
     @Override
@@ -168,27 +204,21 @@ public class DoseReferenceServiceImpl implements DoseReferenceService {
             cible = cibleService.findCibleById(doseReferenceForm.getCibleId(), InvalidParameterException.class);
         }
 
-        DoseReference newdoseReference = DoseReferenceForm.mapToDoseReference(doseReferenceForm, numeroAmm, campagne, culture, cible, segment, unite);
-        return save(newdoseReference);
-    }
+        DoseReference newDoseReference = DoseReferenceForm.mapToDoseReference(doseReferenceForm, numeroAmm, campagne, culture, cible, segment, unite);
 
-    private DoseReference save(DoseReference doseReference) {
         DoseReference found = repository.findOneDoseReferenceByCampagneIdAndNumeroAmmIdAndCultureIdAndCibleId(
-                doseReference.getCampagne().getId(),
-                doseReference.getNumeroAmm().getId(),
-                doseReference.getCulture().getId(),
-                doseReference.getCible() != null ? doseReference.getCible().getId() : (UUID)null);
+                newDoseReference.getCampagne().getId(),
+                newDoseReference.getNumeroAmm().getId(),
+                newDoseReference.getCulture().getId(),
+                newDoseReference.getCible() != null ? newDoseReference.getCible().getId() : (UUID)null);
 
         if (found == null) {
-            doseReference.setId(UUID.randomUUID());
-            log.debug("Create doseReference: {}", doseReference);
+            newDoseReference.setId(UUID.randomUUID());
+            log.debug("Create doseReference: {}", newDoseReference);
         } else {
-            doseReference.setId(found.getId());
-            doseReference.setDateCreation(found.getDateCreation());
-            doseReference.setDateDerniereMaj(LocalDateTime.now());
-            log.debug("Update doseReference: {}", doseReference);
+            throw newConflictException(newDoseReference);
         }
-        return repository.save(doseReference);
+        return repository.save(newDoseReference);
     }
 
     @Override
@@ -214,8 +244,24 @@ public class DoseReferenceServiceImpl implements DoseReferenceService {
             doseReference.setDateCreation(found.getDateCreation());
             doseReference.setDateDerniereMaj(LocalDateTime.now());
             log.debug("Update doseReference: {}", doseReference);
-            return repository.save(doseReference);
 
+            try {
+                return repository.save(doseReference);
+            } catch (DataIntegrityViolationException e) {
+                throw newConflictException(doseReference);
+            }
+        }
+    }
+
+    private ConflictException newConflictException(DoseReference doseReference){
+        if (doseReference.getCible() != null) {
+            return new ConflictException("La dose de référence avec la campagne " + doseReference.getCampagne().getLibelle() +
+                    ", le numéro AMM " + doseReference.getNumeroAmm().getIdMetier() + ", la culture " + doseReference.getCulture().getLibelle() +
+                    " et la cible " + doseReference.getCible().getLibelle() + " existe déjà.");
+        } else {
+            return new ConflictException("La dose de référence avec la campagne " + doseReference.getCampagne().getLibelle() +
+                    ", le numéro AMM " + doseReference.getNumeroAmm().getIdMetier() + " et la culture " + doseReference.getCulture().getLibelle() +
+                    " existe déjà.");
         }
     }
 
@@ -231,14 +277,18 @@ public class DoseReferenceServiceImpl implements DoseReferenceService {
     }
 
     @Override
-    public List<DoseReference> addDosesReferenceCible(Campagne campagne, InputStream inputStream) {
+    public String addDosesReference(Campagne campagne, InputStream inputStream, TypeDoseReference typeDoseReference) {
         try {
+            StopWatch watch = new StopWatch();
+            watch.start("dosesReference " + typeDoseReference.toString() + " " + campagne.getIdMetier() + ": read file");
+
             InputStreamReader inputStreamReader = new InputStreamReader(inputStream, StandardCharsets.UTF_8);
             BufferedReader bufferedReader = new BufferedReader(inputStreamReader);
             String crunchifyLine = bufferedReader.readLine();
             String[] splitData = crunchifyLine.split("\\t");
             Map<String, Integer> columns = new HashMap<>();
             for (int i = 0; i < splitData.length; i++) {
+                splitData[i] = StringHelper.removeDoubleQuotes(splitData[i]);
                 switch (splitData[i]) {
                     case idCultureColumn:
                         columns.put(idCultureColumn, i);
@@ -266,75 +316,63 @@ public class DoseReferenceServiceImpl implements DoseReferenceService {
                 }
             }
 
+            StringBuilder warningMessage = new StringBuilder();
             List<DoseReference> doseReferences = new ArrayList<>();
+            LinkedHashSet<String> doseReferenceUniqueKeys = new LinkedHashSet<>();
+
+            int i = 2;
             while ((crunchifyLine = bufferedReader.readLine()) != null) {
                 DoseReference doseReference = crunchifyCSVtoArrayList(crunchifyLine, campagne, columns);
-                doseReference.setId(UUID.randomUUID());
-                doseReferences.add(doseReference);
-            }
-            repository.save(doseReferences);
-            return doseReferences;
-        } catch (IOException e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
 
-    @Override
-    public List<DoseReference> addDosesReferenceCulture(Campagne campagne, InputStream inputStream) {
-        try {
-            InputStreamReader inputStreamReader = new InputStreamReader(inputStream, StandardCharsets.UTF_8);
-            BufferedReader bufferedReader = new BufferedReader(inputStreamReader);
-            String crunchifyLine = bufferedReader.readLine();
-            String[] splitData = crunchifyLine.split("\\t");
-            Map<String, Integer> columns = new HashMap<>();
-            for (int i = 0; i < splitData.length; i++) {
-                switch (splitData[i]) {
-                    case idCultureColumn:
-                        columns.put(idCultureColumn, i);
-                        break;
-                    case codeAmmColumn:
-                        columns.put(codeAmmColumn, i);
-                        break;
-                    case biocontroleColumn:
-                        columns.put(biocontroleColumn, i);
-                        break;
-                    case idSegmentColumn:
-                        columns.put(idSegmentColumn, i);
-                        break;
-                    case doseRefColumn:
-                        columns.put(doseRefColumn, i);
-                        break;
-                    case idUniteColumn:
-                        columns.put(idUniteColumn, i);
-                        break;
-                    default:
-                        break;
+                String uniqueKey = doseReference.getCampagne().getIdMetier() + "_"
+                        + doseReference.getCulture().getIdMetier() + "_"
+                        + doseReference.getNumeroAmm().getIdMetier() + "_"
+                        + (doseReference.getCible() != null ? doseReference.getCible().getIdMetier() : "");
+
+                if (doseReferenceUniqueKeys.contains(uniqueKey)) {
+                    warningMessage.append(i).append(" => ").append(crunchifyLine).append("\n");
+                    System.out.println("Doublon ligne " + i + " : " + crunchifyLine + "\n");
+                } else {
+                    doseReference.setId(UUID.randomUUID());
+                    doseReferences.add(doseReference);
+                    doseReferenceUniqueKeys.add(uniqueKey);
                 }
+                i++;
             }
 
-            List<DoseReference> doseReferenceCultures = new ArrayList<>();
-            while ((crunchifyLine = bufferedReader.readLine()) != null) {
-                DoseReference doseReferenceCulture = crunchifyCSVtoArrayList(crunchifyLine, campagne, columns);
-                doseReferenceCulture.setId(UUID.randomUUID());
-                doseReferenceCultures.add(doseReferenceCulture);
+            watch.stop();
+            watch.start("dosesReference " + typeDoseReference.toString() + " " + campagne.getIdMetier() + ": save data");
+
+            List<DoseReference> added = repository.save(doseReferences);
+
+            cultureService.cleanCache();
+            segmentService.cleanCache();
+            uniteService.cleanCache();
+            cibleService.cleanCache();
+            numeroAmmService.cleanCache();
+
+            watch.stop();
+            log.info(watch.prettyPrint());
+
+            if (!warningMessage.toString().equals("")) {
+                warningMessage.insert(0, "Des doublons ont été détectés. Les lignes suivantes n'ont pas été ajoutées :\n");
             }
-            repository.save(doseReferenceCultures);
-            return doseReferenceCultures;
+            warningMessage.insert(0, added.size() + " doses de référence ont été ajoutées.\n\n");
+            return warningMessage.toString();
         } catch (IOException e) {
             e.printStackTrace();
             return null;
         }
     }
 
-    @Transactional
     @Override
+    @Transactional
     public void deleteDoseReferenceCible(Campagne campagne) {
         repository.deleteByCampagneIdAndCibleIdIsNotNull(campagne.getId());
     }
 
-    @Transactional
     @Override
+    @Transactional
     public void deleteDoseReferenceCulture(Campagne campagne) {
         repository.deleteByCampagneIdAndCibleIdIsNull(campagne.getId());
     }
@@ -343,22 +381,22 @@ public class DoseReferenceServiceImpl implements DoseReferenceService {
     private DoseReference crunchifyCSVtoArrayList(String crunchifyCSV, Campagne campagne, Map<String, Integer> columns) {
         if (crunchifyCSV != null) {
             String[] splitData = crunchifyCSV.split("\\t");
-            Culture culture = cultureService.findCultureByIdMetier(splitData[columns.get(idCultureColumn)], InvalidParameterException.class);
-            Segment segment = segmentService.findSegmentByIdMetier(splitData[columns.get(idSegmentColumn)], InvalidParameterException.class);
-            Unite unite = uniteService.findUniteByIdMetier(splitData[columns.get(idUniteColumn)], InvalidParameterException.class);
+            Culture culture = cultureService.findCultureByIdMetierWithCache(StringHelper.removeDoubleQuotes(splitData[columns.get(idCultureColumn)]), InvalidParameterException.class);
+            Segment segment = segmentService.findSegmentByIdMetierWithCache(StringHelper.removeDoubleQuotes(splitData[columns.get(idSegmentColumn)]), InvalidParameterException.class);
+            Unite unite = uniteService.findUniteByIdMetierWithCache(StringHelper.removeDoubleQuotes(splitData[columns.get(idUniteColumn)]), InvalidParameterException.class);
 
             Cible cible = null;
-            if (columns.get(idCibleColumn) != null){
-                cible = cibleService.findCibleByIdMetier(splitData[columns.get(idCibleColumn)], InvalidParameterException.class);
+            if (columns.get(idCibleColumn) != null && splitData[columns.get(idCibleColumn)] != null && !splitData[columns.get(idCibleColumn)].trim().isEmpty()){
+                cible = cibleService.findCibleByIdMetierWithCache(StringHelper.removeDoubleQuotes(splitData[columns.get(idCibleColumn)]), InvalidParameterException.class);
             }
 
             NumeroAmm numeroAmm;
             try {
-                numeroAmm = numeroAmmService.findNumeroAmmByIdMetier(splitData[columns.get(codeAmmColumn)]);
+                numeroAmm = numeroAmmService.findNumeroAmmByIdMetierWithCache(StringHelper.removeDoubleQuotes(splitData[columns.get(codeAmmColumn)]));
             } catch (NotFoundException ex) {
                 numeroAmm = NumeroAmm.builder()
                         .id(UUID.randomUUID())
-                        .idMetier(splitData[columns.get(codeAmmColumn)])
+                        .idMetier(StringHelper.removeDoubleQuotes(splitData[columns.get(codeAmmColumn)]))
                         .build();
                 numeroAmm = numeroAmmRepository.save(numeroAmm);
             }
@@ -367,18 +405,19 @@ public class DoseReferenceServiceImpl implements DoseReferenceService {
                     .id(UUID.randomUUID())
                     .numeroAmm(numeroAmm)
                     .campagne(campagne)
-                    .biocontrole(Integer.parseInt(splitData[columns.get(biocontroleColumn)]) == 1)
+                    .biocontrole(Integer.parseInt(StringHelper.removeDoubleQuotes(splitData[columns.get(biocontroleColumn)])) == 1)
                     .culture(culture)
                     .cible(cible)
                     .segment(segment)
                     .unite(unite)
                     .build();
             if (!StringUtils.isEmpty(splitData[columns.get(doseRefColumn)].trim())) {
-                doseReference.setDose(new BigDecimal(splitData[columns.get(doseRefColumn)].replace(",", ".")));
+                doseReference.setDose(new BigDecimal(StringHelper.removeDoubleQuotes(splitData[columns.get(doseRefColumn)].replace(",", "."))));
             }
             return doseReference;
 
         }
         return null;
     }
+
 }

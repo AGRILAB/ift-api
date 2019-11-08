@@ -8,12 +8,12 @@ import fr.gouv.agriculture.ift.helper.SpringControllerHelper;
 import fr.gouv.agriculture.ift.model.Agent;
 import fr.gouv.agriculture.ift.repository.AgentRepository;
 import fr.gouv.agriculture.ift.security.TokenAuthenticationService;
+import fr.gouv.agriculture.ift.service.ConfigurationService;
 import lombok.extern.slf4j.Slf4j;
 import org.jasig.cas.client.validation.Assertion;
 import org.jasig.cas.client.validation.TicketValidationException;
 import org.jasig.cas.client.validation.TicketValidator;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,6 +25,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static fr.gouv.agriculture.ift.Constants.CONF_AUTH_EAP_ENDPOINT_URL;
 import static fr.gouv.agriculture.ift.Constants.ROLE_ADMIN;
 
 @Slf4j
@@ -32,7 +33,6 @@ import static fr.gouv.agriculture.ift.Constants.ROLE_ADMIN;
 @RequestMapping(value = Constants.AUTH, produces = MediaType.APPLICATION_JSON_VALUE)
 public class AuthController {
 
-    @Value("${auth.eap.endpoint.url}")
     private String EAPEndPointURL;
 
     @Autowired
@@ -43,6 +43,13 @@ public class AuthController {
 
     @Autowired
     private AgentRepository agentRepository;
+
+    @Autowired
+    private ConfigurationService configurationService;
+
+    public AuthController(ConfigurationService configurationService) {
+        EAPEndPointURL = configurationService.getValue(CONF_AUTH_EAP_ENDPOINT_URL);
+    }
 
     @RequestMapping(value = "/eap/validate", method = RequestMethod.GET)
     public JwtToken handleAuthValidateEAP(HttpServletRequest request, HttpServletResponse response) throws Exception {

@@ -5,14 +5,13 @@ import fr.gouv.agriculture.ift.Constants;
 import fr.gouv.agriculture.ift.controller.form.AvertissementForm;
 import fr.gouv.agriculture.ift.exception.InvalidBindingEntityException;
 import fr.gouv.agriculture.ift.model.Avertissement;
-import fr.gouv.agriculture.ift.service.*;
+import fr.gouv.agriculture.ift.service.AvertissementService;
 import fr.gouv.agriculture.ift.util.Views;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
@@ -32,19 +31,6 @@ public class AdminAvertissementController {
     @Autowired
     AvertissementService avertissementService;
 
-    @ApiOperation(hidden = true, value = "createAvertissement", notes = "Ajout d'un avertissement")
-    @JsonView(Views.ExtendedPublic.class)
-    @PostMapping(value = AVERTISSEMENTS, consumes = MediaType.APPLICATION_JSON_VALUE)
-    @ResponseStatus(code = HttpStatus.CREATED)
-    public Avertissement createAvertissement(@ApiParam(value = "Avertissement", required = true)
-                                   @RequestBody @Valid AvertissementForm avertissementForm,
-                                   BindingResult result) {
-        if (result.hasErrors()) {
-            throw new InvalidBindingEntityException(result);
-        }
-        return avertissementService.save(avertissementForm);
-    }
-
     @ApiOperation(hidden = true, value = "updateAvertissement", notes = "Modification d'un avertissement")
     @JsonView(Views.ExtendedPublic.class)
     @PutMapping(value = AVERTISSEMENTS + "/{avertissementId}", consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -57,15 +43,6 @@ public class AdminAvertissementController {
             throw new InvalidBindingEntityException(result);
         }
         return avertissementService.updateById(avertissementId, avertissementForm);
-    }
-
-    @ApiOperation(hidden = true, value = "deleteAvertissement", notes = "Suppression d'un avertissement")
-    @JsonView(Views.ExtendedPublic.class)
-    @DeleteMapping(AVERTISSEMENTS + "/{avertissementId}")
-    @ResponseStatus(code = HttpStatus.NO_CONTENT)
-    public void deleteAvertissement(@ApiParam(value = "Identification de l'avertissement", required = true)
-                               @PathVariable UUID avertissementId) {
-        avertissementService.delete(avertissementId);
     }
 
     @ApiOperation(hidden = true, value = "findAllAvertissements", notes = "Retourne la liste des avertissements")

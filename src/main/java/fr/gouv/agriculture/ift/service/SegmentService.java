@@ -8,13 +8,13 @@ import java.util.UUID;
 
 public interface SegmentService {
 
-    Segment save(SegmentForm segmentForm);
     List<Segment> findAllSegments();
     Segment findSegmentById(UUID segmentId);
     Segment findSegmentById(UUID id, Class<? extends Throwable> throwableClass);
     Segment findSegmentByIdMetier(String idMetier);
     Segment findSegmentByIdMetier(String idMetier, Class<? extends Throwable> throwableClass);
+    Segment findSegmentByIdMetierWithCache(String idMetier, Class<? extends Throwable> throwableClass);
+    void cleanCache();
     Segment updateById(UUID id, SegmentForm segmentForm);
-    void delete(UUID id);
 
 }

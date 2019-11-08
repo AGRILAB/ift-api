@@ -5,14 +5,15 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDate;
+import java.util.List;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class TraitementParcelle {
+public class BilanGroupeCultures {
 
-    private LocalDate date;
-    private IftTraitement iftTraitement;
+    private GroupeCultures groupeCultures;
+    private List<BilanCulture> bilanCultures;
+    private BilanParSegment bilanParSegment;
 }

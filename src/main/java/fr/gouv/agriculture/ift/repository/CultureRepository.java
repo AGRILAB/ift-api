@@ -10,7 +10,7 @@ import java.util.UUID;
 public interface CultureRepository extends JpaRepository<Culture, UUID> {
 
     Culture findCultureByIdMetier(String idMetier);
-    List<Culture> findCultureByNormalizedLibelleStartingWithOrNormalizedLibelleContainingOrderByLibelleAsc(
-            String normalizedLibelleStart, String normalizedLibelleContains, Pageable pageable);
+    List<Culture> findCultureByNormalizedLibelleStartingWithOrNormalizedLibelleContainingOrIdMetierStartingWithOrderByLibelleAsc(
+            String normalizedLibelleStart, String normalizedLibelleContains, String normalizedIdMetierStart, Pageable pageable);
     List<Culture> findCultureByGroupeCulturesIdMetierOrderByLibelleAsc(String groupeCulturesIdMetier);
 }

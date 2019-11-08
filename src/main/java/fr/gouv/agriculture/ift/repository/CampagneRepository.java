@@ -9,4 +9,5 @@ public interface CampagneRepository extends JpaRepository<Campagne, UUID> {
 
     Campagne findCampagneByIdMetier(String idMetier);
     Campagne findFirstByActive(Boolean active);
+    Campagne findFirstByOrderByDateCreationDesc();
 }

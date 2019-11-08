@@ -1,15 +1,14 @@
 package fr.gouv.agriculture.ift.service.impl;
 
 import fr.gouv.agriculture.ift.controller.form.AgentForm;
+import fr.gouv.agriculture.ift.exception.ConflictException;
 import fr.gouv.agriculture.ift.exception.NotFoundException;
 import fr.gouv.agriculture.ift.model.Agent;
 import fr.gouv.agriculture.ift.repository.AgentRepository;
 import fr.gouv.agriculture.ift.service.AgentService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.annotation.CacheConfig;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
@@ -18,14 +17,12 @@ import java.util.UUID;
 
 @Slf4j
 @Service
-@CacheConfig(cacheNames = "agent")
 public class AgentServiceImpl implements AgentService {
 
     @Autowired
     private AgentRepository repository;
 
     @Override
-    @CacheEvict(allEntries = true)
     public Agent save(AgentForm agentForm) {
         Agent newAgent = AgentForm.mapToAgent(agentForm);
         Agent found = repository.findAgentByLogin(newAgent.getLogin());
@@ -34,22 +31,23 @@ public class AgentServiceImpl implements AgentService {
             newAgent.setId(UUID.randomUUID());
             log.debug("Create Agent: {}", newAgent);
         } else {
-            newAgent.setId(found.getId());
-            log.debug("Update Agent: {}", newAgent);
+            throw newConflictException(newAgent);
         }
 
-        return repository.save(newAgent);
+        try{
+            return repository.save(newAgent);
+        } catch (DataIntegrityViolationException e) {
+            throw newConflictException(newAgent);
+        }
     }
 
     @Override
-    @Cacheable(key = "#root.methodName")
     public List<Agent> findAllAgents() {
         log.debug("Get All Agents");
         return repository.findAll(new Sort(Sort.Direction.ASC, "login"));
     }
 
     @Override
-    @Cacheable(key = "#root.methodName + '_' + #login")
     public Agent findAgentByLogin(String login) {
         log.debug("Get Agent by Login: {}", login);
         Agent found = repository.findAgentByLogin(login);
@@ -62,7 +60,6 @@ public class AgentServiceImpl implements AgentService {
     }
 
     @Override
-    @CacheEvict(allEntries = true)
     public Agent updateById(UUID id, AgentForm agentForm) {
         Agent found = repository.findOne(id);
 
@@ -73,12 +70,15 @@ public class AgentServiceImpl implements AgentService {
             agent.setId(id);
             log.debug("Update Agent: {}", agent);
 
-            return repository.save(agent);
+            try {
+                return repository.save(agent);
+            } catch (DataIntegrityViolationException e) {
+                throw newConflictException(agent);
+            }
         }
     }
 
     @Override
-    @CacheEvict(allEntries = true)
     public void delete(UUID id) {
         log.debug("Delete Agent: {}", id);
         Agent found = repository.findOne(id);
@@ -87,5 +87,9 @@ public class AgentServiceImpl implements AgentService {
         } else {
             repository.delete(id);
         }
+    }
+
+    private ConflictException newConflictException(Agent agent){
+        return new ConflictException("L'agent avec le login " + agent.getLogin() + " ou l'adresse email " + agent.getEmail() + " existe déjà.");
     }
 }

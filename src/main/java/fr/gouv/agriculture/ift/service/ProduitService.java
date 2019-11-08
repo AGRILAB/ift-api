@@ -4,7 +4,6 @@ import fr.gouv.agriculture.ift.controller.form.ProduitForm;
 import fr.gouv.agriculture.ift.model.Campagne;
 import fr.gouv.agriculture.ift.model.NumeroAmm;
 import fr.gouv.agriculture.ift.model.Produit;
-import fr.gouv.agriculture.ift.model.ValiditeProduit;
 import org.springframework.data.domain.Pageable;
 
 import java.io.InputStream;
@@ -17,6 +16,7 @@ public interface ProduitService {
     Produit findProduitByLibelle(String libelle,  Class<? extends Throwable> throwableClass);
     List<Produit> findProduits(String campagneIdMetier, String cultureIdMetier, String cibleIdMetier, String filter, Pageable pageable);
     List<Produit> findProduitsByCampagneAndOrCultureAndOrCible(String campagneIdMetier, String cultureIdMetier, String cibleIdMetier, String filtre, Pageable pageable);
+    String findProduitsByCampagneAsCSV(String campagneIdMetier);
     List<NumeroAmm> getNumeroAmmByProduitAndCampagne(String produitLibelle, String campagneIdMetier);
 
     Produit save(ProduitForm produitForm);
@@ -24,5 +24,5 @@ public interface ProduitService {
     void delete(UUID id);
     void deleteValiditeProduitByCampagne(Campagne campagne);
 
-    List<ValiditeProduit> addProduits(Campagne campagne, InputStream inputStream);
+    String addProduits(Campagne campagne, InputStream inputStream);
 }

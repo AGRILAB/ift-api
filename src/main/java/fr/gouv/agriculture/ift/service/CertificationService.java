@@ -1,16 +1,21 @@
 package fr.gouv.agriculture.ift.service;
 
+import fr.gouv.agriculture.ift.model.Certificat;
+import fr.gouv.agriculture.ift.model.IftTraitement;
+import fr.gouv.agriculture.ift.model.Signature;
+
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.PublicKey;
-import java.security.cert.CertificateEncodingException;
+import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 
 public interface CertificationService {
 
-    String hash(String toBeHashed);
-    String sign(String toBeSigned) throws IOException, GeneralSecurityException;
-    String verify(String givenData, String givenSignature, PublicKey publicKey) throws IOException;
-    X509Certificate getCertificate() throws IOException;
-    String getClePublique() throws CertificateEncodingException, IOException;
+    String sign(IftTraitement ift) throws IOException, GeneralSecurityException;
+
+    IftTraitement verify(String givenSignature, PublicKey publicKey) throws IOException;
+    IftTraitement verify(Signature signature) throws IOException;
+
+    X509Certificate getCertificate(Certificat certificat) throws CertificateException;
 }

@@ -27,7 +27,7 @@ public class IftServiceImpl implements IftService {
     private CibleService cibleService;
 
     @Autowired
-    private TraitementService traitementService;
+    private TypeTraitementService typeTraitementService;
 
     @Autowired
     private SegmentService segmentService;
@@ -45,7 +45,7 @@ public class IftServiceImpl implements IftService {
     private AvertissementService avertissementService;
 
     @Override
-    public IftTraitement computeIftTraitement(String campagneIdMetier, String numeroAmmIdMetier, String cultureIdMetier, String cibleIdMetier, String traitementIdMetier, String uniteIdMetier, BigDecimal dose, BigDecimal volumeDeBouillie, BigDecimal facteurDeCorrection) {
+    public IftTraitement computeIftTraitement(String campagneIdMetier, String numeroAmmIdMetier, String cultureIdMetier, String cibleIdMetier, String typeTraitementIdMetier, String uniteIdMetier, BigDecimal dose, BigDecimal volumeDeBouillie, BigDecimal facteurDeCorrection) {
         IftTraitement ift = new IftTraitement();
 
         facteurDeCorrection = facteurDeCorrection != null ? facteurDeCorrection : new BigDecimal("100");
@@ -53,18 +53,18 @@ public class IftServiceImpl implements IftService {
 
         Campagne campagne = getCampagne(campagneIdMetier);
         ift.setCampagne(campagne);
-        Traitement traitement = getTraitement(traitementIdMetier);
-        ift.setTraitement(traitement);
-
-        // 1. Traitement de semences
-        if (traitement.getAvantSemis()) {
-            ift.setIft(getDefaultIft(facteurDeCorrection));
-            ift.setSegment(getSegment(false, null, traitement));
-            return ift;
-        }
+        TypeTraitement typeTraitement = getTraitement(typeTraitementIdMetier);
+        ift.setTypeTraitement(typeTraitement);
 
         Culture culture = getCulture(cultureIdMetier);
         ift.setCulture(culture);
+
+        // 1. TypeTraitement de semences
+        if (typeTraitement.getAvantSemis()) {
+            ift.setIft(getDefaultIft(facteurDeCorrection));
+            ift.setSegment(getSegment(false, null, typeTraitement));
+            return ift;
+        }
 
         try {
             NumeroAmm numeroAmm = getNumeroAmm(numeroAmmIdMetier);
@@ -78,12 +78,12 @@ public class IftServiceImpl implements IftService {
 
                 DoseReference doseReferenceCible = null;
                 try {
-                    doseReferenceCible = doseReferenceService.findDoseReferenceByCampagneAndCultureAndNumeroAmmAndCible(campagne.getIdMetier(), culture.getIdMetier(), numeroAmm.getIdMetier(), cible.getIdMetier());
+                    doseReferenceCible = doseReferenceService.findDoseReferenceByCampagneAndCultureAndNumeroAmmAndCible(campagne, culture, numeroAmm, cible);
                 } catch (NotFoundException nfe) {
                     //Nothing to do;
                 }
                 if (doseReferenceCible != null) {
-                    return getIftTraitement(ift, uniteIdMetier, doseReferenceCible.getUnite(), doseReferenceCible.getBiocontrole(), volumeDeBouillie, dose, doseReferenceCible.getDose(), facteurDeCorrection, traitement, doseReferenceCible.getSegment());
+                    return getIftTraitement(ift, uniteIdMetier, doseReferenceCible.getUnite(), doseReferenceCible.getBiocontrole(), volumeDeBouillie, dose, doseReferenceCible.getDose(), facteurDeCorrection, typeTraitement, doseReferenceCible.getSegment());
                 }
             }
 
@@ -91,7 +91,8 @@ public class IftServiceImpl implements IftService {
             DoseReference doseReferenceCulture = null;
 
             try {
-                doseReferenceCulture = doseReferenceService.findDoseReferenceByCampagneAndCultureAndNumeroAmmAndCible(campagne.getIdMetier(), culture.getIdMetier(), numeroAmm.getIdMetier(), null);
+                doseReferenceCulture = doseReferenceService.findDoseReferenceByCampagneAndCultureAndNumeroAmmAndCible(campagne, culture, numeroAmm, null);
+
             } catch (NotFoundException nfe) {
                 //Nothing to do
             }
@@ -99,25 +100,34 @@ public class IftServiceImpl implements IftService {
             if (doseReferenceCulture != null) {
                 Avertissement avertissement = avertissementService.findAvertissementByIdMetier("AV2");
                 ift.setAvertissement(avertissement);
-                ift = getIftTraitement(ift, uniteIdMetier, doseReferenceCulture.getUnite(), doseReferenceCulture.getBiocontrole(), volumeDeBouillie, dose, doseReferenceCulture.getDose(), facteurDeCorrection, traitement, doseReferenceCulture.getSegment());
+                ift = getIftTraitement(ift, uniteIdMetier, doseReferenceCulture.getUnite(), doseReferenceCulture.getBiocontrole(), volumeDeBouillie, dose, doseReferenceCulture.getDose(), facteurDeCorrection, typeTraitement, doseReferenceCulture.getSegment());
                 return ift;
             }
-        } catch (Exception ignoredException) { }
+        } catch (Exception ignoredException) {
+            if (!StringUtils.isEmpty(cibleIdMetier)) {
+                Cible cible = getCible(cibleIdMetier);
+                ift.setCible(cible);
+            }
+        }
 
         // 2.3. Hypothèse de calcul par défault
-        ift.setSegment(getSegment(false, null, traitement));
+        ift.setSegment(getSegment(false, null, typeTraitement));
         ift.setIft(getDefaultIft(facteurDeCorrection));
         Avertissement avertissement = avertissementService.findAvertissementByIdMetier("AV1");
         ift.setAvertissement(avertissement);
         return ift;
     }
 
-    private IftTraitement getIftTraitement(IftTraitement ift, String uniteDoseAppliqueeId, Unite uniteDoseReference, boolean biocontrole, BigDecimal volumeDeBouillie, BigDecimal doseAppliquee, BigDecimal doseReference, BigDecimal facteurDeCorrection, Traitement traitement, Segment segment) {
-        ift.setSegment(getSegment(biocontrole, segment, traitement));
+    private IftTraitement getIftTraitement(IftTraitement ift, String uniteDoseAppliqueeId, Unite uniteDoseReference, boolean biocontrole, BigDecimal volumeDeBouillie, BigDecimal doseAppliquee, BigDecimal doseReference, BigDecimal facteurDeCorrection, TypeTraitement typeTraitement, Segment segment) {
+        ift.setSegment(getSegment(biocontrole, segment, typeTraitement));
+        ift.setDoseReference(doseReference);
+        ift.setUniteDoseReference(uniteDoseReference);
 
         // Produit sans dose de référence
         if (uniteDoseReference.getIdMetier().equals("U0") || doseReference == null) {
             ift.setIft(getDefaultIft(facteurDeCorrection));
+            Avertissement avertissement = avertissementService.findAvertissementByIdMetier("AV12");
+            ift.setAvertissement(avertissement);
             return ift;
         }
 
@@ -146,7 +156,7 @@ public class IftServiceImpl implements IftService {
         // Unité dose = unité dose ref
         if (uniteDoseAppliquee.getIdMetier().equals(uniteDoseReference.getIdMetier())) {
             ift.setIft(
-                    doseAppliquee.divide(doseReference, 10, RoundingMode.CEILING).multiply(getDefaultIft(facteurDeCorrection))
+                    doseAppliquee.divide(doseReference, 10, RoundingMode.HALF_EVEN).multiply(getDefaultIft(facteurDeCorrection))
             );
             return ift;
         }
@@ -154,7 +164,7 @@ public class IftServiceImpl implements IftService {
         if (uniteDoseAppliquee.getUniteDeConversion() != null && uniteDoseAppliquee.getUniteDeConversion().getUnite().getId().equals(uniteDoseReference.getId()) && uniteDoseAppliquee.getUniteDeConversion().getType().equals(TypeDeConversion.DIVISION)) {
             if (volumeDeBouillie != null) {
                 ift.setIft(
-                        doseAppliquee.divide(volumeDeBouillie, 10, RoundingMode.CEILING).divide(doseReference, 10, RoundingMode.CEILING).multiply(facteurDeCorrection)
+                        doseAppliquee.divide(volumeDeBouillie, 10, RoundingMode.HALF_EVEN).divide(doseReference, 10, RoundingMode.HALF_EVEN).multiply(facteurDeCorrection)
                 );
                 return ift;
             } else {
@@ -166,7 +176,7 @@ public class IftServiceImpl implements IftService {
         } else if (uniteDoseAppliquee.getUniteDeConversion() != null && uniteDoseAppliquee.getUniteDeConversion().getUnite().getId().equals(uniteDoseReference.getId()) && uniteDoseAppliquee.getUniteDeConversion().getType().equals(TypeDeConversion.MULTIPLICATION)) {
             if (volumeDeBouillie != null) {
                 ift.setIft(
-                        doseAppliquee.multiply(volumeDeBouillie).divide(doseReference, 10, RoundingMode.CEILING).multiply(new BigDecimal("0.01")).multiply(getDefaultIft(facteurDeCorrection))
+                        doseAppliquee.multiply(volumeDeBouillie).divide(doseReference, 10, RoundingMode.HALF_EVEN).multiply(new BigDecimal("0.01")).multiply(getDefaultIft(facteurDeCorrection))
                 );
                 return ift;
             } else {
@@ -184,10 +194,10 @@ public class IftServiceImpl implements IftService {
     }
 
     private BigDecimal getDefaultIft(BigDecimal facteurDeCorrection) {
-        return facteurDeCorrection.divide(new BigDecimal("100"), 10, RoundingMode.CEILING);
+        return facteurDeCorrection.divide(new BigDecimal("100"), 10, RoundingMode.HALF_EVEN);
     }
 
-    private Segment getSegment(boolean biocontrole, Segment doseReferenceSegment, Traitement traitement) {
+    private Segment getSegment(boolean biocontrole, Segment doseReferenceSegment, TypeTraitement typeTraitement) {
         if (biocontrole) {
             return segmentService.findSegmentByIdMetier("S2");
         }
@@ -197,7 +207,7 @@ public class IftServiceImpl implements IftService {
         }
 
         Segment segment;
-        switch (traitement.getIdMetier()) {
+        switch (typeTraitement.getIdMetier()) {
             case "T1":
                 segment = segmentService.findSegmentByIdMetier("S1");
                 break;
@@ -244,11 +254,11 @@ public class IftServiceImpl implements IftService {
         }
     }
 
-    private Traitement getTraitement(String traitementIdMetier) {
+    private TypeTraitement getTraitement(String traitementIdMetier) {
         try {
-            return traitementService.findTraitementByIdMetier(traitementIdMetier);
+            return typeTraitementService.findTypeTraitementByIdMetier(traitementIdMetier);
         } catch (NotFoundException ex) {
-            throw new InvalidParameterException("Le type de traitement ayant pour id métier " + traitementIdMetier + " n'existe pas.");
+            throw new InvalidParameterException("Le type de typeTraitement ayant pour id métier " + traitementIdMetier + " n'existe pas.");
         }
     }
 

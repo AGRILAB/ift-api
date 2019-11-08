@@ -14,16 +14,12 @@ import org.hibernate.validator.constraints.NotEmpty;
 public class SegmentForm {
 
     @NotEmpty
-    private String idMetier;
-
-    @NotEmpty
     private String libelle;
 
     private String description;
 
     public static Segment mapToSegment(SegmentForm segmentForm) {
         Segment segment = new Segment();
-        segment.setIdMetier(segmentForm.getIdMetier());
         segment.setLibelle(segmentForm.getLibelle());
         segment.setDescription(segmentForm.getDescription());
         return segment;

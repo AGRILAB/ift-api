@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 @RestController
 @RequestMapping(value = Constants.API_HELLO_ROOT, produces = MediaType.APPLICATION_JSON_VALUE)
-@Api(tags = { Constants.HELLO }, description = "Hello")
+@Api(tags = { Constants.HELLO }, description = "Tester l'accès à notre API :)")
 public class HelloController {
 
     @ApiOperation(value = "hello", notes = "Retourne Hello")

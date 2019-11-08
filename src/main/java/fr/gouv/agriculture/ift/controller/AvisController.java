@@ -7,9 +7,7 @@ import fr.gouv.agriculture.ift.exception.InvalidBindingEntityException;
 import fr.gouv.agriculture.ift.model.Avis;
 import fr.gouv.agriculture.ift.service.AvisService;
 import fr.gouv.agriculture.ift.util.Views;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
+import io.swagger.annotations.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -23,7 +21,7 @@ import java.util.List;
 @Slf4j
 @RestController
 @RequestMapping(value = Constants.API_AVIS_ROOT, produces = MediaType.APPLICATION_JSON_VALUE)
-@Api(tags = {Constants.AVIS}, description = "Ressources sur les avis")
+@Api(tags = {Constants.AVIS}, description = "Collecter l'avis des utilisateurs finaux de l'API IFT")
 public class AvisController {
 
     @Autowired
@@ -37,6 +35,9 @@ public class AvisController {
     }
 
     @ApiOperation(value = "findAvisByNote", notes = "Retourne la liste des avis en fonction de la note fournie")
+    @ApiResponses(value = {
+            @ApiResponse(code = 400, message = "Bad Request")
+    })
     @JsonView(Views.Public.class)
     @GetMapping("/{note}")
     public List<Avis> findAvisByNote(@ApiParam(value = "Note", required = true)
@@ -45,6 +46,10 @@ public class AvisController {
     }
 
     @ApiOperation(value = "createAvis", notes = "Ajout d'un avis")
+    @ApiResponses(value = {
+            @ApiResponse(code = 400, message = "Bad Request"),
+            @ApiResponse(code = 422, message = "Unprocessable Entity")
+    })
     @JsonView(Views.Public.class)
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     @ResponseStatus(code = HttpStatus.CREATED)

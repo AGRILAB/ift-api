@@ -9,8 +9,6 @@ import java.util.UUID;
 public interface AvertissementService {
 
     Avertissement findAvertissementByIdMetier(String idMetier);
-    Avertissement save(AvertissementForm avertissementForm);
     List<Avertissement> findAllAvertissements();
     Avertissement updateById(UUID id, AvertissementForm avertissementForm);
-    void delete(UUID id);
 }

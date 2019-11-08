@@ -1,6 +1,7 @@
 package fr.gouv.agriculture.ift.service.impl;
 
 import fr.gouv.agriculture.ift.controller.form.CampagneForm;
+import fr.gouv.agriculture.ift.exception.ConflictException;
 import fr.gouv.agriculture.ift.exception.InvalidParameterException;
 import fr.gouv.agriculture.ift.exception.NotFoundException;
 import fr.gouv.agriculture.ift.model.Campagne;
@@ -8,9 +9,7 @@ import fr.gouv.agriculture.ift.repository.CampagneRepository;
 import fr.gouv.agriculture.ift.service.CampagneService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.annotation.CacheConfig;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
@@ -20,14 +19,12 @@ import java.util.UUID;
 
 @Slf4j
 @Service
-@CacheConfig(cacheNames = "campagne")
 public class CampagneServiceImpl implements CampagneService {
 
     @Autowired
     private CampagneRepository repository;
 
     @Override
-    @CacheEvict(allEntries = true)
     public Campagne save(CampagneForm campagneForm) {
         Campagne newCampagne = CampagneForm.mapToCampagne(campagneForm);
         Campagne found = repository.findCampagneByIdMetier(newCampagne.getIdMetier());
@@ -36,13 +33,10 @@ public class CampagneServiceImpl implements CampagneService {
             newCampagne.setId(UUID.randomUUID());
             log.debug("Create Campagne: {}", newCampagne);
         } else {
-            newCampagne.setId(found.getId());
-            newCampagne.setDateCreation(found.getDateCreation());
-            newCampagne.setDateDerniereMaj(LocalDateTime.now());
-            log.debug("Update Campagne: {}", newCampagne);
+            throw newConflictException(newCampagne);
         }
 
-        if (newCampagne.getActive() == true) {
+        if (newCampagne.getActive()) {
             Campagne previousActiveCampagne = getCurrentCampagne();
             if (previousActiveCampagne != null) {
                 previousActiveCampagne.setActive(false);
@@ -54,26 +48,22 @@ public class CampagneServiceImpl implements CampagneService {
     }
 
     @Override
-    @Cacheable(key = "#root.methodName")
     public Campagne getCurrentCampagne() {
         return repository.findFirstByActive(true);
     }
 
     @Override
-    @Cacheable(key = "#root.methodName")
     public List<Campagne> findAllCampagnes() {
         log.debug("Get All Campagnes");
         return repository.findAll(new Sort(Sort.Direction.ASC, "idMetier"));
     }
 
     @Override
-    @Cacheable(key = "#root.methodName + '_' + #id")
     public Campagne findCampagneById(UUID id) {
         return findCampagneById(id, null);
     }
 
     @Override
-    @Cacheable(key = "#root.methodName + '_' + #id")
     public Campagne findCampagneById(UUID id, Class<? extends Throwable> throwableClass) {
         log.debug("Get Campagne by Id: {}", id.toString());
         Campagne found = repository.findOne(id);
@@ -89,7 +79,6 @@ public class CampagneServiceImpl implements CampagneService {
     }
 
     @Override
-    @Cacheable(key = "#root.methodName + '_' + #idMetier")
     public Campagne findCampagneByIdMetier(String idMetier) {
         log.debug("Get Campagne by IdMetier: {}", idMetier);
         Campagne found = repository.findCampagneByIdMetier(idMetier);
@@ -102,14 +91,13 @@ public class CampagneServiceImpl implements CampagneService {
     }
 
     @Override
-    @CacheEvict(allEntries = true)
     public Campagne updateById(UUID id, CampagneForm campagneForm) {
         Campagne found = repository.findOne(id);
 
         if (found == null) {
             throw new NotFoundException();
         } else {
-            if (found.getActive() == true && campagneForm.getActive() == false) {
+            if (found.getActive() && !campagneForm.getActive()) {
                 throw new InvalidParameterException("Il faut obligatoirement une campagne active.");
             }
 
@@ -119,7 +107,7 @@ public class CampagneServiceImpl implements CampagneService {
             campagne.setDateDerniereMaj(LocalDateTime.now());
             log.debug("Update Campagne: {}", campagne);
 
-            if (campagne.getActive() == true) {
+            if (campagne.getActive()) {
                 Campagne previousActiveCampagne = getCurrentCampagne();
                 if (previousActiveCampagne != null) {
                     previousActiveCampagne.setActive(false);
@@ -127,12 +115,15 @@ public class CampagneServiceImpl implements CampagneService {
                 }
             }
 
-            return repository.save(campagne);
+            try{
+                return repository.save(campagne);
+            } catch (DataIntegrityViolationException e) {
+                throw newConflictException(campagne);
+            }
         }
     }
 
     @Override
-    @CacheEvict(allEntries = true)
     public void delete(UUID id) {
         log.debug("Delete Campagne: {}", id);
         Campagne found = repository.findOne(id);
@@ -140,6 +131,16 @@ public class CampagneServiceImpl implements CampagneService {
             throw new NotFoundException();
         } else {
             repository.delete(id);
+            Campagne active = getCurrentCampagne();
+            if (active == null) {
+                Campagne last = repository.findFirstByOrderByDateCreationDesc();
+                last.setActive(true);
+                repository.save(last);
+            }
         }
+    }
+
+    private ConflictException newConflictException(Campagne campagne) {
+        return new ConflictException("La campagne avec l'identifiant " + campagne.getIdMetier() + " existe déjà.");
     }
 }

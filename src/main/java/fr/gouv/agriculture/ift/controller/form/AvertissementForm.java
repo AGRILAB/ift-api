@@ -14,14 +14,10 @@ import org.hibernate.validator.constraints.NotEmpty;
 public class AvertissementForm {
 
     @NotEmpty
-    private String idMetier;
-
-    @NotEmpty
     private String libelle;
 
     public static Avertissement mapToAvertissement(AvertissementForm avertissementForm) {
         Avertissement avertissement = new Avertissement();
-        avertissement.setIdMetier(avertissementForm.getIdMetier());
         avertissement.setLibelle(avertissementForm.getLibelle());
         return avertissement;
     }

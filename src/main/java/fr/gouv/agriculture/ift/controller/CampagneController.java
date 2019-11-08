@@ -5,9 +5,7 @@ import fr.gouv.agriculture.ift.Constants;
 import fr.gouv.agriculture.ift.model.Campagne;
 import fr.gouv.agriculture.ift.service.CampagneService;
 import fr.gouv.agriculture.ift.util.Views;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
+import io.swagger.annotations.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -21,7 +19,7 @@ import java.util.List;
 @Slf4j
 @RestController
 @RequestMapping(value = Constants.API_CAMPAGNES_ROOT, produces = MediaType.APPLICATION_JSON_VALUE)
-@Api(tags = {Constants.CAMPAGNES}, description = "Ressources sur les campagnes")
+@Api(tags = {Constants.CAMPAGNES}, description = "Référentiel des campagnes culturales")
 public class CampagneController {
 
     @Autowired
@@ -35,6 +33,9 @@ public class CampagneController {
     }
 
     @ApiOperation(value = "findByIdMetier", notes = "Retourne la campagne par son identifiant métier")
+    @ApiResponses(value = {
+            @ApiResponse(code = 404, message = "Not Found")
+    })
     @JsonView(Views.Public.class)
     @GetMapping("/{campagneIdMetier}")
     public Campagne findById(@ApiParam(value = "Identifiant métier de la campagne", required = true)

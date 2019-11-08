@@ -13,11 +13,11 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(callSuper = false)
-public class ClePublique extends AbstractTimestampedEntity {
+public class Certificat extends AbstractTimestampedEntity {
 
     @Id
     private UUID id;
 
     @NotNull
-    private String cle;
+    private String cert;
 }
