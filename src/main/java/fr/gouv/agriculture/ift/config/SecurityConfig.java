@@ -86,13 +86,12 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                         API_CAMPAGNES_ROOT + "/**",
                         API_GROUPES_CULTURES_ROOT + "/**",
                         API_SEGMENTS_ROOT + "/**",
-                        API_TRAITEMENTS_ROOT + "/**",
+                        API_TYPES_TRAITEMENTS_ROOT + "/**",
                         API_CULTURES_ROOT + "/**",
                         API_CIBLES_ROOT + "/**",
                         API_UNITES_ROOT,
                         API_NUMEROS_AMM_ROOT + "/**",
-                        API_VALIDITES_PRODUITS + "/**",
-                        API_PRODUITS + "/**",
+                        API_PRODUITS_ROOT + "/**",
                         API_DOSES_REFERENCE_ROOT + "/**",
                         API_PRODUITS_DOSES_REFERENCE_ROOT + "/**",
                         API_AVERTISSEMENTS_ROOT + "/**",
@@ -102,12 +101,12 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 // Authentication API
                 .antMatchers(AUTH + "/**").permitAll()
 
-                // By default protect other routes
-                .anyRequest().denyAll()
+                // By default permitAll, to return 404 if the route does not exists
+                .anyRequest().permitAll()
                 .and()
 
                 // And filter other requests to check the presence of JWT in header but the provided excluded requestURIs
-                .addFilterBefore(new JWTAuthenticatedFilter(tokenAuthenticationService, Collections.singletonList("/**")),
+                .addFilterBefore(new JWTAuthenticatedFilter(tokenAuthenticationService, Collections.singletonList(API_ADMIN_ROOT + "/**")),
                         UsernamePasswordAuthenticationFilter.class);
     }
 

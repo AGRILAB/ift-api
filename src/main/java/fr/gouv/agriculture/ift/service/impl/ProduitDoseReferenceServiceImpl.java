@@ -1,5 +1,6 @@
 package fr.gouv.agriculture.ift.service.impl;
 
+import fr.gouv.agriculture.ift.exception.NotFoundException;
 import fr.gouv.agriculture.ift.model.ProduitDoseReference;
 import fr.gouv.agriculture.ift.model.enumeration.TypeDoseReference;
 import fr.gouv.agriculture.ift.repository.DoseReferencePredicateBuilder;
@@ -24,7 +25,7 @@ public class ProduitDoseReferenceServiceImpl implements ProduitDoseReferenceServ
 
     @Override
     public List<ProduitDoseReference> findProduitsDosesReferenceByCampagneAndCultureAndProduitAndNumeroAmmAndCible(
-            String campagneIdMetier, String cultureIdMetier, String produitLibelle, String numeroAmmIdMetier, String cibleIdMetier, TypeDoseReference typeDoseReference, Boolean biocontrole, Pageable pageable) {
+            String campagneIdMetier, String cultureIdMetier, String produitLibelle, String[] numeroAmmIdMetier, String cibleIdMetier, TypeDoseReference typeDoseReference, Boolean biocontrole, Pageable pageable) {
 
         List<ProduitDoseReference> doseReferences = new ArrayList<>();
 
@@ -37,11 +38,14 @@ public class ProduitDoseReferenceServiceImpl implements ProduitDoseReferenceServ
             doseReferences.addAll(queryProduitsDosesReference(campagneIdMetier, cultureIdMetier, produitLibelle, numeroAmmIdMetier, cibleIdMetier, TypeDoseReference.culture, biocontrole, pageable));
         }
 
+        if (doseReferences.size() == 0){
+            throw new NotFoundException();
+        }
         return doseReferences;
     }
 
     private List<ProduitDoseReference> queryProduitsDosesReference(
-            String campagneIdMetier, String cultureIdMetier, String produitLibelle, String numeroAmmIdMetier, String cibleIdMetier, TypeDoseReference typeDoseReference, Boolean biocontrole, Pageable pageable) {
+            String campagneIdMetier, String cultureIdMetier, String produitLibelle, String[] numeroAmmIdMetier, String cibleIdMetier, TypeDoseReference typeDoseReference, Boolean biocontrole, Pageable pageable) {
         CriteriaBuilder builder = entityManager.getCriteriaBuilder();
         CriteriaQuery<ProduitDoseReference> query = builder.createQuery(ProduitDoseReference.class);
         Root<ProduitDoseReference> root = query.from(ProduitDoseReference.class);

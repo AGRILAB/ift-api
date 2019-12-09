@@ -11,5 +11,6 @@ public interface ValiditeProduitRepository extends JpaRepository<ValiditeProduit
     ValiditeProduit findByProduitIdAndCampagneIdAndNumeroAmmId(UUID produitId, UUID campagneId, UUID numeroAmmId);
     List<ValiditeProduit> findByProduitLibelleAndCampagneIdMetier(String produitLibelle, String campagneIdMetier);
     List<ValiditeProduit> findByNumeroAmmIdInOrderByNumeroAmmIdMetierAscProduitLibelleAsc(List<UUID> numeroAmmIds);
+    List<ValiditeProduit> findByCampagneIdMetier(String campagneIdMetier);
     void deleteByCampagneId(UUID campagneId);
 }

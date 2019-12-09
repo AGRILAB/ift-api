@@ -17,9 +17,9 @@ public class DoseReferencePredicateBuilder {
         this.root = root;
     }
 
-    public Predicate appendPredicate(Predicate predicate, String campagneIdMetier, String numeroAmmIdMetier, String cultureIdMetier, String cibleIdMetier){
+    public Predicate appendPredicate(Predicate predicate, String campagneIdMetier, String[] numeroAmmIdMetier, String cultureIdMetier, String cibleIdMetier){
         Predicate result = predicate;
-        result = appendStringPredicate(result, root.get("numeroAmm").get("idMetier"), numeroAmmIdMetier);
+        result = appendInPredicate(result, root.get("numeroAmm").get("idMetier"), numeroAmmIdMetier);
         result = appendStringPredicate(result, root.get("cible").get("idMetier"), cibleIdMetier);
         result = appendStringPredicate(result, root.get("culture").get("idMetier"), cultureIdMetier);
         result = appendStringPredicate(result, root.get("campagne").get("idMetier"), campagneIdMetier);
@@ -27,7 +27,7 @@ public class DoseReferencePredicateBuilder {
         return result;
     }
 
-    public Predicate appendPredicate(Predicate predicate, String campagneIdMetier, String numeroAmmIdMetier, String cultureIdMetier, String cibleIdMetier, TypeDoseReference typeDoseReference, Boolean biocontrole){
+    public Predicate appendPredicate(Predicate predicate, String campagneIdMetier, String[] numeroAmmIdMetier, String cultureIdMetier, String cibleIdMetier, TypeDoseReference typeDoseReference, Boolean biocontrole){
 
         Predicate result = predicate;
         result = appendPredicate(result, campagneIdMetier, numeroAmmIdMetier, cultureIdMetier, cibleIdMetier);
@@ -37,7 +37,15 @@ public class DoseReferencePredicateBuilder {
         return result;
     }
 
-    public Predicate appendPredicate(Predicate predicate, String campagneIdMetier, String numeroAmmIdMetier, String cultureIdMetier, String cibleIdMetier, String produitLibelle, TypeDoseReference typeDoseReference, Boolean biocontrole) {
+    public Predicate appendPredicate(Predicate predicate, String campagneIdMetier, String[] numeroAmmIdMetier, String cultureIdMetier, String cibleIdMetier, String produitLibelle) {
+        Predicate result = predicate;
+        result = appendStringPredicate(result, root.get("produit").get("libelle"), produitLibelle);
+        result = appendPredicate(result, campagneIdMetier, numeroAmmIdMetier, cultureIdMetier, cibleIdMetier);
+
+        return result;
+    }
+
+    public Predicate appendPredicate(Predicate predicate, String campagneIdMetier, String[] numeroAmmIdMetier, String cultureIdMetier, String cibleIdMetier, String produitLibelle, TypeDoseReference typeDoseReference, Boolean biocontrole) {
         Predicate result = predicate;
         result = appendStringPredicate(result, root.get("produit").get("libelle"), produitLibelle);
         result = appendPredicate(result, campagneIdMetier, numeroAmmIdMetier, cultureIdMetier, cibleIdMetier, typeDoseReference, biocontrole);
@@ -56,15 +64,26 @@ public class DoseReferencePredicateBuilder {
         return result;
     }
 
+    public Predicate appendInPredicate(Predicate predicate, Path path, Object[] criteria){
+
+        Predicate result = predicate;
+        if (criteria != null){
+            Predicate idMetierPredicate = path.in(criteria);
+            result = criteriaBuilder.and(result, criteriaBuilder.and(idMetierPredicate));
+        }
+
+        return result;
+    }
+
     public Predicate appendTypeDoseReferencePredicate(Predicate predicate, TypeDoseReference typeDoseReference){
 
         Predicate result = predicate;
         Predicate ciblePredicate = null;
         if (TypeDoseReference.culture.equals(typeDoseReference)){
-            ciblePredicate = criteriaBuilder.isNull(root.get("cible"));
+            ciblePredicate = root.get("cible").isNull();
         }else if (TypeDoseReference.cible.equals(typeDoseReference))
         {
-            ciblePredicate = criteriaBuilder.isNotNull(root.get("cible"));
+            ciblePredicate = root.get("cible").isNotNull();
         }
 
         if (ciblePredicate != null){

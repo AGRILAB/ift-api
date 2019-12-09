@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheConfig;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -26,20 +27,17 @@ public class SegmentServiceImpl implements SegmentService {
     private SegmentRepository repository;
 
     @Override
-    @Cacheable(key = "#root.methodName")
     public List<Segment> findAllSegments() {
         log.debug("Get All Segments");
-        return repository.findAll();
+        return repository.findAll(new Sort(Sort.Direction.ASC, "libelle"));
     }
 
     @Override
-    @Cacheable(key = "#root.methodName + '_' + #id")
     public Segment findSegmentById(UUID id) {
         return findSegmentById(id, null);
     }
 
     @Override
-    @Cacheable(key = "#root.methodName + '_' + #id")
     public Segment findSegmentById(UUID id, Class<? extends Throwable> throwableClass) {
         log.debug("Get Segment by Id: {}", id.toString());
         Segment found = repository.findOne(id);
@@ -56,20 +54,18 @@ public class SegmentServiceImpl implements SegmentService {
 
 
     @Override
-    @Cacheable(key = "#root.methodName + '_' + #idMetier")
     public Segment findSegmentByIdMetier(String idMetier) {
         return findSegmentByIdMetier(idMetier, null);
     }
 
     @Override
-    @Cacheable(key = "#root.methodName + '_' + #idMetier")
     public Segment findSegmentByIdMetier(String idMetier, Class<? extends Throwable> throwableClass) {
         log.debug("Get Segment by IdMetier: {}", idMetier.toString());
         Segment found = repository.findSegmentByIdMetier(idMetier);
 
         if (found == null) {
             if (InvalidParameterException.class.equals(throwableClass)){
-                throw new InvalidParameterException("La culture ayant pour id métier" + idMetier + " n'existe pas.");
+                throw new InvalidParameterException("Le segment ayant pour id métier " + idMetier + " n'existe pas.");
             }
             throw new NotFoundException();
         } else {
@@ -78,26 +74,15 @@ public class SegmentServiceImpl implements SegmentService {
     }
 
     @Override
-    @CacheEvict(allEntries = true)
-    public Segment save(SegmentForm segmentForm) {
-        Segment newSegment = SegmentForm.mapToSegment(segmentForm);
-        Segment found = repository.findSegmentByIdMetier(newSegment.getIdMetier());
-
-        if (found == null) {
-            newSegment.setId(UUID.randomUUID());
-            log.debug("Create Segment: {}", newSegment);
-        } else {
-            newSegment.setId(found.getId());
-            newSegment.setDateCreation(found.getDateCreation());
-            newSegment.setDateDerniereMaj(LocalDateTime.now());
-            log.debug("Update Segment: {}", newSegment);
-        }
-
-        return repository.save(newSegment);
+    @Cacheable(key = "#root.methodName + '_' + #idMetier")
+    public Segment findSegmentByIdMetierWithCache(String idMetier, Class<? extends Throwable> throwableClass) {
+        return findSegmentByIdMetier(idMetier, throwableClass);
     }
 
-    @Override
     @CacheEvict(allEntries = true)
+    public void cleanCache() { }
+
+    @Override
     public Segment updateById(UUID id, SegmentForm segmentForm) {
         Segment found = repository.findOne(id);
 
@@ -106,22 +91,11 @@ public class SegmentServiceImpl implements SegmentService {
         } else {
             Segment segment = SegmentForm.mapToSegment(segmentForm);
             segment.setId(id);
+            segment.setIdMetier(found.getIdMetier());
             segment.setDateCreation(found.getDateCreation());
             segment.setDateDerniereMaj(LocalDateTime.now());
             log.debug("Update Segment: {}", segment);
             return repository.save(segment);
-        }
-    }
-
-    @Override
-    @CacheEvict(allEntries = true)
-    public void delete(UUID id) {
-        log.debug("Delete Segment: {}", id);
-        Segment found = repository.findOne(id);
-        if (found == null) {
-            throw new NotFoundException();
-        } else {
-            repository.delete(id);
         }
     }
 

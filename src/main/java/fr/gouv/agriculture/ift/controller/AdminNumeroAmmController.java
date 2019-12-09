@@ -3,6 +3,7 @@ package fr.gouv.agriculture.ift.controller;
 import com.fasterxml.jackson.annotation.JsonView;
 import fr.gouv.agriculture.ift.Constants;
 import fr.gouv.agriculture.ift.dto.NumeroAmmDTO;
+import fr.gouv.agriculture.ift.dto.WarningDTO;
 import fr.gouv.agriculture.ift.exception.InvalidBindingEntityException;
 import fr.gouv.agriculture.ift.service.NumeroAmmService;
 import fr.gouv.agriculture.ift.util.Views;
@@ -39,10 +40,10 @@ public class AdminNumeroAmmController {
     @ApiOperation(hidden = true, value = "addNumerosAmm", notes = "Ajout des numéros AMM avec un fichier CSV")
     @JsonView(Views.ExtendedPublic.class)
     @PostMapping(value = NUMEROS_AMM + CSV)
-    @ResponseStatus(code = HttpStatus.NO_CONTENT)
-    public void addNumerosAmm(HttpServletRequest request) throws IOException, ServletException {
+    public WarningDTO addNumerosAmm(HttpServletRequest request) throws IOException, ServletException {
         InputStream inputStream = request.getPart("file").getInputStream();
-        numeroAmmService.addNumerosAmm(inputStream);
+        String warningMessage = numeroAmmService.addNumerosAmm(inputStream);
+        return WarningDTO.builder().message(warningMessage).build();
     }
 
     @ApiOperation(hidden = true, value = "createNumeroAmm", notes = "Ajout d'un numéro AMM")
@@ -83,13 +84,14 @@ public class AdminNumeroAmmController {
 
     @ApiOperation(hidden = true, value = "findAllNumerosAmm", notes = "Retourne la liste des numéros AMM")
     @ApiImplicitParams({
-            @ApiImplicitParam(name = "page", dataType = "integer", paramType = "query",
+            @ApiImplicitParam(name = "page", dataType = "int", paramType = "query",
                     value = "Page de résultats à récupérer (0 par défaut)."),
-            @ApiImplicitParam(name = "size", dataType = "integer", paramType = "query",
-                    value = "Nombre de résultats par page (200 par défaut).")
+            @ApiImplicitParam(name = "size", dataType = "int", paramType = "query",
+                    value = "Nombre de résultats par page (200 par défaut, max 2000).")
     })
     @JsonView(Views.ExtendedPublic.class)
     @GetMapping(NUMEROS_AMM)
+    @ResponseStatus(code = HttpStatus.PARTIAL_CONTENT)
     public List<NumeroAmmDTO> findAllNumerosAmm(@ApiParam(value = "Filtre sur le numéro AMM")
                                              @RequestParam(value = "filtre", required = false) String filtre,
                                                 @PageableDefault(page= 0, value = 200) Pageable pageable) {

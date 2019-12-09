@@ -10,21 +10,24 @@ import java.util.UUID;
 
 public interface CultureService {
 
-    List<Culture> findCultures(String campagneIdMetier, String numeroAmmIdMetier, String cibleIdMetier, String filter, Pageable pageable);
+    List<Culture> findCultures(String campagneIdMetier, String[] numeroAmmIdMetier, String cibleIdMetier, String filter, Pageable pageable);
     List<Culture> findAllCultures();
     List<Culture> findAllCultures(Pageable pageable);
     List<Culture> findAllCultures(String filter, Pageable pageable);
-    List<Culture> findCulturesByCampagneAndNumeroAmmAndOrCible(String campagneIdMetier, String numeroAmmIdMetier, String cibleIdMetier, String filter, Pageable pageable);
+    String findAllCulturesAsCSV();
+    List<Culture> findCulturesByCampagneAndNumeroAmmAndOrCible(String campagneIdMetier, String[] numeroAmmIdMetier, String cibleIdMetier, String filter, Pageable pageable);
     List<Culture> findCulturesByGroupeCultures(String groupeCulturesIdMetier);
 
     Culture findCultureById(UUID cibleId);
     Culture findCultureById(UUID id, Class<? extends Throwable> throwableClass);
     Culture findCultureByIdMetier(String idMetier);
     Culture findCultureByIdMetier(String idMetier, Class<? extends Throwable> throwableClass);
+    Culture findCultureByIdMetierWithCache(String idMetier, Class<? extends Throwable> throwableClass);
+    void cleanCache();
 
     Culture save(CultureForm cultureForm);
     Culture updateById(UUID id, CultureForm cultureForm);
     void delete(UUID id);
 
-    List<Culture> addCultures(InputStream inputStream);
+    String addCultures(InputStream inputStream);
 }

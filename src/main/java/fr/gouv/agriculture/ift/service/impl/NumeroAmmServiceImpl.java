@@ -1,6 +1,7 @@
 package fr.gouv.agriculture.ift.service.impl;
 
 import fr.gouv.agriculture.ift.dto.NumeroAmmDTO;
+import fr.gouv.agriculture.ift.exception.ConflictException;
 import fr.gouv.agriculture.ift.exception.InvalidParameterException;
 import fr.gouv.agriculture.ift.exception.NotFoundException;
 import fr.gouv.agriculture.ift.model.*;
@@ -10,10 +11,13 @@ import fr.gouv.agriculture.ift.repository.ValiditeProduitRepository;
 import fr.gouv.agriculture.ift.service.CampagneService;
 import fr.gouv.agriculture.ift.service.NumeroAmmService;
 import fr.gouv.agriculture.ift.service.ProduitService;
+import fr.gouv.agriculture.ift.util.StringHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheConfig;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -57,17 +61,22 @@ public class NumeroAmmServiceImpl implements NumeroAmmService {
     private static final Sort SORT = new Sort(Sort.Direction.ASC, "idMetier");
 
     public List<NumeroAmm> findNumerosAmm(String campagneIdMetier, String cultureIdMetier, String cibleIdMetier, String filtre, Pageable pageable){
+        List<NumeroAmm> numerosAmm;
         if (!StringUtils.isEmpty(campagneIdMetier) || !StringUtils.isEmpty(cultureIdMetier) || !StringUtils.isEmpty(cibleIdMetier)) {
-            return findNumerosAmmByCampagneAndCultureAndOrCible(campagneIdMetier, cultureIdMetier, cibleIdMetier, filtre, pageable);
+            numerosAmm = findNumerosAmmByCampagneAndCultureAndCible(campagneIdMetier, cultureIdMetier, cibleIdMetier, filtre, pageable);
         } else if (!StringUtils.isEmpty(filtre)){
-            return findAllNumerosAmm(filtre, pageable);
+            numerosAmm = findAllNumerosAmm(filtre, pageable);
         } else {
-            return findAllNumerosAmm(pageable);
+            numerosAmm = findAllNumerosAmm(pageable);
         }
+
+        if (numerosAmm.size() == 0){
+            throw new NotFoundException();
+        }
+        return numerosAmm;
     }
 
     @Override
-    @Cacheable(key = "#root.methodName")
     public List<NumeroAmm> findAllNumerosAmm() {
         log.debug("Get All NumerosAmm");
         return repository.findAll(SORT);
@@ -92,28 +101,32 @@ public class NumeroAmmServiceImpl implements NumeroAmmService {
     }
 
     @Override
-    public List<NumeroAmm> findNumerosAmmByCampagneAndCultureAndOrCible(String campagneIdMetier, String cultureIdMetier, String cibleIdMetier, String filtre, Pageable pageable) {
+    public List<NumeroAmm> findNumerosAmmByCampagneAndCultureAndCible(String campagneIdMetier, String cultureIdMetier, String cibleIdMetier, String filtre, Pageable pageable) {
         log.debug("Get All Numeros Amm by Campagne And Culture And/Or Cible: {}", campagneIdMetier, cultureIdMetier, cibleIdMetier);
 
         CriteriaBuilder builder = entityManager.getCriteriaBuilder();
         CriteriaQuery<NumeroAmm> query = builder.createQuery(NumeroAmm.class);
-        Root<DoseReference> root = query.from(DoseReference.class);
+        Root<NumeroAmm> fromNumeroAmm = query.from(NumeroAmm.class);
 
-        DoseReferencePredicateBuilder predicateBuilder = new DoseReferencePredicateBuilder(builder, root);
-        Predicate predicate = predicateBuilder.appendPredicate(builder.conjunction(), campagneIdMetier, null, cultureIdMetier, cibleIdMetier);
+        Subquery doseRefQuery = query.subquery(DoseReference.class);
+        Root<DoseReference> fromDoseRef = doseRefQuery.from(DoseReference.class);
 
-        Path<NumeroAmm> numeroAmmType = root.get("numeroAmm");
-        Path<String> idMetierPath = numeroAmmType.get("idMetier");
+        DoseReferencePredicateBuilder predicateBuilder = new DoseReferencePredicateBuilder(builder, fromDoseRef);
+        Predicate doseRefPredicate = predicateBuilder.appendPredicate(builder.conjunction(), campagneIdMetier, null, cultureIdMetier, cibleIdMetier);
+
+        doseRefQuery.select(fromDoseRef.get("numeroAmm"));
+        doseRefQuery.where(doseRefPredicate);
+
+        Predicate numeroAmmPredicate = builder.in(fromNumeroAmm.get("id")).value(doseRefQuery);
+        Path<String> idMetierPath = fromNumeroAmm.get("idMetier");
 
         if (!StringUtils.isEmpty(filtre)) {
             Predicate filterPredicate = builder.like(idMetierPath, filtre + "%");
-            predicate = builder.and(predicate, filterPredicate);
+            numeroAmmPredicate = builder.and(numeroAmmPredicate, filterPredicate);
         }
 
-        query.where(predicate);
-
-        query.select(numeroAmmType).distinct(true);
-        query.orderBy(builder.asc(idMetierPath ));
+        query.where(numeroAmmPredicate);
+        query.orderBy(builder.asc(idMetierPath));
 
         TypedQuery<NumeroAmm> typedQuery = entityManager.createQuery(query);
         if (pageable != null){
@@ -123,6 +136,42 @@ public class NumeroAmmServiceImpl implements NumeroAmmService {
 
         return typedQuery.getResultList();
 
+    }
+
+    @Override
+    public List<NumeroAmm> findNumerosAmmByCampagneAndCultureAndProduitAndCible(
+            String campagneIdMetier, String cultureIdMetier, String produitLibelle, String cibleIdMetier){
+        log.debug("Get All NumerosAmm by Campagne And/Or Culture And/Or Produit And/Or Cible: {}", campagneIdMetier, cultureIdMetier, produitLibelle, cibleIdMetier);
+
+        CriteriaBuilder builder = entityManager.getCriteriaBuilder();
+
+        CriteriaQuery<NumeroAmm> query = builder.createQuery(NumeroAmm.class);
+        Root<NumeroAmm> fromNumeroAmm = query.from(NumeroAmm.class);
+
+        //Subquery for DoseReference
+        Subquery produitDoseRefQuery = query.subquery(ProduitDoseReference.class);
+        Root<ProduitDoseReference> fromProduitDoseRef = produitDoseRefQuery.from(ProduitDoseReference.class);
+
+        DoseReferencePredicateBuilder predicateBuilder = new DoseReferencePredicateBuilder(builder, fromProduitDoseRef);
+        Predicate doseRefPredicate = predicateBuilder.appendPredicate(builder.conjunction(), campagneIdMetier, null, cultureIdMetier, cibleIdMetier, produitLibelle);
+
+        produitDoseRefQuery.select(fromProduitDoseRef.get("numeroAmm"));
+        produitDoseRefQuery.where(doseRefPredicate);
+
+        Predicate numeroAmmPredicate = builder.in(fromNumeroAmm.get("id")).value(produitDoseRefQuery);
+        Path<String> idMetierPath = fromNumeroAmm.get("idMetier");
+
+        query.where(numeroAmmPredicate);
+        query.orderBy(builder.asc(idMetierPath));
+
+        TypedQuery<NumeroAmm> typedQuery = entityManager.createQuery(query);
+
+        List<NumeroAmm> numerosAmm = typedQuery.getResultList();
+
+        if (numerosAmm.size() == 0){
+            throw new NotFoundException();
+        }
+        return numerosAmm;
     }
 
     @Override
@@ -153,8 +202,10 @@ public class NumeroAmmServiceImpl implements NumeroAmmService {
             return getNumeroAmmWithValidite(numeroAmm, campagnes, filteredValiditesProduit);
         }).collect(Collectors.toList());
 
+        if (numerosAmmDto.size() == 0){
+            throw new NotFoundException();
+        }
         return numerosAmmDto;
-
     }
 
     private NumeroAmmDTO getNumeroAmmWithValidite(NumeroAmm numeroAmm){
@@ -224,19 +275,53 @@ public class NumeroAmmServiceImpl implements NumeroAmmService {
     }
 
     @Override
+    @Cacheable(key = "#root.methodName + '_' + #idMetier")
+    public NumeroAmm findNumeroAmmByIdMetierWithCache(String idMetier) {
+        return findNumeroAmmByIdMetier(idMetier);
+    }
+
+    @CacheEvict(allEntries = true)
+    public void cleanCache() { }
+
+    @Override
     @Transactional
     public NumeroAmmDTO save(NumeroAmmDTO numeroAmmDTO) {
         NumeroAmm newNumeroAmm = NumeroAmmDTO.mapToNumeroAmm(numeroAmmDTO);
-        NumeroAmm numeroAmm = save(newNumeroAmm);
+        NumeroAmm found = repository.findNumeroAmmByIdMetier(newNumeroAmm.getIdMetier());
 
-        //Create related ValiditeProduit
-        Map<String, Map<String, Boolean>> validites = numeroAmmDTO.getValidites();
+        if (found == null) {
+            newNumeroAmm.setId(UUID.randomUUID());
+            log.debug("Create NumeroAmm: {}", newNumeroAmm);
 
-        if (validites != null){
-            createValiditesProduit(numeroAmm, validites);
+            NumeroAmm numeroAmm = repository.save(newNumeroAmm);
+
+            //Create related ValiditeProduit
+            Map<String, Map<String, Boolean>> validites = numeroAmmDTO.getValidites();
+
+            if (validites != null){
+                createValiditesProduit(numeroAmm, validites);
+            }
+
+            return getNumeroAmmWithValidite(numeroAmm);
+        } else {
+            throw newConflictException(newNumeroAmm);
+        }
+    }
+
+    private NumeroAmm saveOrUpdate(NumeroAmm numeroAmm) {
+        NumeroAmm found = repository.findNumeroAmmByIdMetier(numeroAmm.getIdMetier());
+
+        if (found == null) {
+            numeroAmm.setId(UUID.randomUUID());
+            log.debug("Create NumeroAmm: {}", numeroAmm);
+        } else {
+            numeroAmm.setId(found.getId());
+            numeroAmm.setDateCreation(found.getDateCreation());
+            numeroAmm.setDateDerniereMaj(LocalDateTime.now());
+            log.debug("Update NumeroAmm: {}", numeroAmm);
         }
 
-        return getNumeroAmmWithValidite(numeroAmm);
+        return repository.save(numeroAmm);
     }
 
     private void createValiditesProduit(NumeroAmm numeroAmm, Map<String, Map<String, Boolean>> validites){
@@ -265,22 +350,6 @@ public class NumeroAmmServiceImpl implements NumeroAmmService {
         }
     }
 
-    private NumeroAmm save(NumeroAmm numeroAmm) {
-        NumeroAmm found = repository.findNumeroAmmByIdMetier(numeroAmm.getIdMetier());
-
-        if (found == null) {
-            numeroAmm.setId(UUID.randomUUID());
-            log.debug("Create NumeroAmm: {}", numeroAmm);
-        } else {
-            numeroAmm.setId(found.getId());
-            numeroAmm.setDateCreation(found.getDateCreation());
-            numeroAmm.setDateDerniereMaj(LocalDateTime.now());
-            log.debug("Update NumeroAmm: {}", numeroAmm);
-        }
-
-        return repository.save(numeroAmm);
-    }
-
     @Override
     @Transactional
     public NumeroAmmDTO updateById(UUID id, NumeroAmmDTO numeroAmmDTO) {
@@ -294,15 +363,19 @@ public class NumeroAmmServiceImpl implements NumeroAmmService {
             numeroAmm.setDateCreation(found.getDateCreation());
             numeroAmm.setDateDerniereMaj(LocalDateTime.now());
             log.debug("Update NumeroAmm: {}", numeroAmm);
-            numeroAmm = repository.save(numeroAmm);
 
-            //Create related ValiditeProduit
-            Map<String, Map<String, Boolean>> validites = numeroAmmDTO.getValidites();
+            try {
+                numeroAmm = repository.save(numeroAmm);
 
-            if (validites != null){
-                updateValiditesProduit(numeroAmm, validites);
+                //Create related ValiditeProduit
+                Map<String, Map<String, Boolean>> validites = numeroAmmDTO.getValidites();
+
+                if (validites != null){
+                    updateValiditesProduit(numeroAmm, validites);
+                }
+            } catch (DataIntegrityViolationException e) {
+                throw newConflictException(numeroAmm);
             }
-
             return getNumeroAmmWithValidite(numeroAmm);
         }
     }
@@ -355,7 +428,7 @@ public class NumeroAmmServiceImpl implements NumeroAmmService {
     }
 
     @Override
-    public List<NumeroAmm> addNumerosAmm(InputStream inputStream) {
+    public String addNumerosAmm(InputStream inputStream) {
         try {
             InputStreamReader inputStreamReader = new InputStreamReader(inputStream, StandardCharsets.UTF_8);
             BufferedReader bufferedReader = new BufferedReader(inputStreamReader);
@@ -363,6 +436,7 @@ public class NumeroAmmServiceImpl implements NumeroAmmService {
             String[] splitData = crunchifyLine.split("\\t");
             Map<String, Integer> columns = new HashMap<>();
             for (int i = 0; i < splitData.length; i++) {
+                splitData[i] = StringHelper.removeDoubleQuotes(splitData[i]);
                 switch (splitData[i]) {
                     case codeAmm:
                         columns.put(codeAmm, i);
@@ -375,10 +449,11 @@ public class NumeroAmmServiceImpl implements NumeroAmmService {
 
             while ((crunchifyLine = bufferedReader.readLine()) != null) {
                 NumeroAmm numeroAmm = crunchifyCSVtoArrayList(crunchifyLine, columns);
-                numerosAmm.add(numeroAmm);
+                NumeroAmm saved = saveOrUpdate(numeroAmm);
+                numerosAmm.add(saved);
             }
-            repository.save(numerosAmm);
-            return numerosAmm;
+
+            return numerosAmm.size() + " numéros AMM ont été ajoutés ou mis à jour.\n";
         } catch (IOException e) {
             e.printStackTrace();
             return null;
@@ -392,11 +467,14 @@ public class NumeroAmmServiceImpl implements NumeroAmmService {
 
             NumeroAmm numeroAmm = NumeroAmm.builder()
                     .id(UUID.randomUUID())
-                    .idMetier(splitData[columns.get(codeAmm)])
+                    .idMetier(StringHelper.removeDoubleQuotes(splitData[columns.get(codeAmm)]))
                     .build();
             return numeroAmm;
         }
         return null;
     }
 
+    private ConflictException newConflictException(NumeroAmm numeroAmm){
+        return new ConflictException("Le numéro AMM avec l'identifiant " + numeroAmm.getIdMetier() + " existe déjà.");
+    }
 }

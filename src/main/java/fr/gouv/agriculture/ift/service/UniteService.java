@@ -14,6 +14,8 @@ public interface UniteService {
     Unite findUniteById(UUID uniteId, Class<? extends Throwable> throwableClass);
     Unite findUniteByIdMetier(String idMetier);
     Unite findUniteByIdMetier(String idMetier, Class<? extends Throwable> throwableClass);
+    Unite findUniteByIdMetierWithCache(String idMetier, Class<? extends Throwable> throwableClass);
+    void cleanCache();
     Unite updateById(UUID id, UniteForm uniteForm);
     void delete(UUID id);
 

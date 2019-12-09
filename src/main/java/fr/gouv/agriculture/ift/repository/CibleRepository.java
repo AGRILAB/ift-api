@@ -10,5 +10,5 @@ import java.util.UUID;
 public interface CibleRepository extends JpaRepository<Cible, UUID> {
 
     Cible findCibleByIdMetier(String idMetier);
-    List<Cible> findCibleByNormalizedLibelleStartingWithOrNormalizedLibelleContainingOrderByLibelleAsc(String normalizedLibelleStart, String normalizedLibelleContains, Pageable pageable);
+    List<Cible> findCibleByNormalizedLibelleStartingWithOrNormalizedLibelleContainingOrIdMetierStartingWithOrderByLibelleAsc(String normalizedLibelleStart, String normalizedLibelleContains, String idMetierStart, Pageable pageable);
 }

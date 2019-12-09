@@ -4,6 +4,7 @@ import fr.gouv.agriculture.ift.model.DoseReference;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface DoseReferenceRepository extends JpaRepository<DoseReference, UUID>, JpaSpecificationExecutor<DoseReference> {
@@ -18,15 +19,8 @@ public interface DoseReferenceRepository extends JpaRepository<DoseReference, UU
      */
     DoseReference findOneDoseReferenceByCampagneIdAndNumeroAmmIdAndCultureIdAndCibleId(UUID campagneId, UUID numeroAmmId, UUID cultureId, UUID cibleId);
 
-    /**
-     * Recherche une dose de référence par campagneIdMetier, numeroAmmIdMetier, cultureIdMetier, cibleIdMetier
-     * @param campagneIdMetier
-     * @param numeroAmmIdMetier
-     * @param cultureIdMetier
-     * @param cibleIdMetier
-     * @return
-     */
-    DoseReference findOneDoseReferenceByCampagneIdMetierAndNumeroAmmIdMetierAndCultureIdMetierAndCibleIdMetier(String campagneIdMetier, String numeroAmmIdMetier, String cultureIdMetier, String cibleIdMetier);
+    List<DoseReference> findDoseReferenceByCampagneIdAndCulture_GroupeCulturesId(
+            UUID campagneId, UUID groupeCulturesId);
 
     /**
      * Supprime toutes les doses de référence à la culture pour une campagne
@@ -39,4 +33,14 @@ public interface DoseReferenceRepository extends JpaRepository<DoseReference, UU
      * @param campagneId
      */
     void deleteByCampagneIdAndCibleIdIsNotNull(UUID campagneId);
+
+
+    /**
+     * Recherche une dose de référence par campagneId, numeroAmmId, cultureId
+     * @param campagneId
+     * @param numeroAmmId
+     * @param cultureId
+     * @return la première DoseReference qui match les critères
+     */
+	DoseReference findOneDoseReferenceByCampagneIdAndNumeroAmmIdAndCultureId(UUID campagneId, UUID numeroAmmId, UUID cultureId);
 }

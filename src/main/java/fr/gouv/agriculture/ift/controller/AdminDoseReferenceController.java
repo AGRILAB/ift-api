@@ -3,6 +3,7 @@ package fr.gouv.agriculture.ift.controller;
 import com.fasterxml.jackson.annotation.JsonView;
 import fr.gouv.agriculture.ift.Constants;
 import fr.gouv.agriculture.ift.controller.form.DoseReferenceForm;
+import fr.gouv.agriculture.ift.dto.WarningDTO;
 import fr.gouv.agriculture.ift.exception.InvalidBindingEntityException;
 import fr.gouv.agriculture.ift.exception.InvalidParameterException;
 import fr.gouv.agriculture.ift.exception.NotFoundException;
@@ -83,15 +84,15 @@ public class AdminDoseReferenceController {
     @ApiOperation(hidden = true, value = "addDosesReferenceCible", notes = "Ajout de doses de référence définies à la cible avec un fichier CSV")
     @JsonView(Views.ExtendedPublic.class)
     @PostMapping(value = DOSES_REFERENCE_CIBLE + CSV)
-    @ResponseStatus(code = HttpStatus.NO_CONTENT)
-    public void addDosesReferenceCible(@ApiParam(value = "Identification de la campagne", required = true)
+    public WarningDTO addDosesReferenceCible(@ApiParam(value = "Identification de la campagne", required = true)
                                            @RequestParam(value = "campagneIdMetier") String campagneIdMetier,
-                                                           HttpServletRequest request) throws IOException, ServletException {
+                                             HttpServletRequest request) throws IOException, ServletException {
         InputStream inputStream = request.getPart("file").getInputStream();
         try {
             Campagne campagne = campagneService.findCampagneByIdMetier(campagneIdMetier);
             doseReferenceService.deleteDoseReferenceCible(campagne);
-            doseReferenceService.addDosesReferenceCible(campagne, inputStream);
+            String warning = doseReferenceService.addDosesReference(campagne, inputStream, TypeDoseReference.cible);
+            return WarningDTO.builder().message(warning).build();
         } catch (NotFoundException ex) {
             throw new InvalidParameterException("La campagne ayant pour id métier " + campagneIdMetier + " n'existe pas.");
         }
@@ -100,15 +101,15 @@ public class AdminDoseReferenceController {
     @ApiOperation(hidden = true, value = "addDosesReferenceCulture", notes = "Ajout de doses de référence définies à la culture avec un fichier CSV")
     @JsonView(Views.ExtendedPublic.class)
     @PostMapping(value = DOSES_REFERENCE_CULTURE + CSV)
-    @ResponseStatus(code = HttpStatus.NO_CONTENT)
-    public void addDosesReferenceCulture(@ApiParam(value = "Identification de la campagne", required = true)
+    public WarningDTO addDosesReferenceCulture(@ApiParam(value = "Identification de la campagne", required = true)
                                              @RequestParam(value = "campagneIdMetier") String campagneIdMetier,
                                                                HttpServletRequest request) throws IOException, ServletException {
         InputStream inputStream = request.getPart("file").getInputStream();
         try {
             Campagne campagne = campagneService.findCampagneByIdMetier(campagneIdMetier);
             doseReferenceService.deleteDoseReferenceCulture(campagne);
-            doseReferenceService.addDosesReferenceCulture(campagne, inputStream);
+            String warning = doseReferenceService.addDosesReference(campagne, inputStream, TypeDoseReference.culture);
+            return WarningDTO.builder().message(warning).build();
         } catch (NotFoundException ex) {
             throw new InvalidParameterException("La campagne ayant pour id métier " + campagneIdMetier + " n'existe pas.");
         }
@@ -116,19 +117,20 @@ public class AdminDoseReferenceController {
 
     @ApiOperation(hidden = true, value = "findAllDosesReference", notes = "Retourne la liste des doses de référence")
     @ApiImplicitParams({
-            @ApiImplicitParam(name = "page", dataType = "integer", paramType = "query",
+            @ApiImplicitParam(name = "page", dataType = "int", paramType = "query",
                     value = "Page de résultats à récupérer (0 par défaut)."),
-            @ApiImplicitParam(name = "size", dataType = "integer", paramType = "query",
-                    value = "Nombre de résultats par page (200 par défaut).")
+            @ApiImplicitParam(name = "size", dataType = "int", paramType = "query",
+                    value = "Nombre de résultats par page (200 par défaut, max 2000).")
     })
     @JsonView(Views.ExtendedPublic.class)
     @GetMapping(DOSES_REFERENCE)
+    @ResponseStatus(code = HttpStatus.PARTIAL_CONTENT)
     public List<DoseReference> findAllDosesReference(@ApiParam(value = "Identifiant de la campagne")
                                                      @RequestParam(value = "campagneIdMetier", required = false) String campagneIdMetier,
                                                      @ApiParam(value = "Identifiant de la culture")
                                                      @RequestParam(value = "cultureIdMetier", required = false) String cultureIdMetier,
                                                      @ApiParam(value = "Identifiant du numero Amm")
-                                                     @RequestParam(value = "numeroAmmIdMetier", required = false) String numeroAmmIdMetier,
+                                                     @RequestParam(value = "numeroAmmIdMetier", required = false) String[] numeroAmmIdMetier,
                                                      @ApiParam(value = "Identifiant de la cible")
                                                      @RequestParam(value = "cibleIdMetier", required = false) String cibleIdMetier,
                                                      @ApiParam(value = "Type de dose de référence (culture ou cible)")

@@ -4,7 +4,7 @@
 
     <groupId>fr.gouv.agriculture</groupId>
     <artifactId>ift-api</artifactId>
-    <version>0.10.2.ctrl-SNAPSHOT</version>
+    <version>1.6.4-SNAPSHOT</version>
     <packaging>war</packaging>
 
     <name>ift-api</name>
@@ -97,6 +97,13 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- HikariCP : JDBC Pool -->
+        <dependency>
+            <groupId>com.zaxxer</groupId>
+            <artifactId>HikariCP</artifactId>
+            <version>2.5.1</version>
+        </dependency>
+
         <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>
@@ -158,6 +165,39 @@
             </exclusions>
         </dependency>
 
+        <!-- CSV Serialization -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.dataformat</groupId>
+            <artifactId>jackson-dataformat-csv</artifactId>
+            <version>2.8.6</version>
+        </dependency>
+
+        <!-- Thymeleaf -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-thymeleaf</artifactId>
+        </dependency>
+
+        <!-- Flying saucer pdf -->
+        <dependency>
+            <groupId>org.xhtmlrenderer</groupId>
+            <artifactId>flying-saucer-pdf</artifactId>
+            <version>9.1.9</version>
+        </dependency>
+
+        <!-- Qr code generation zxing -->
+        <dependency>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>core</artifactId>
+            <version>2.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>javase</artifactId>
+            <version>2.0</version>
+        </dependency>
+
     </dependencies>
 
     <dependencyManagement>
@@ -173,21 +213,20 @@
     </dependencyManagement>
 
     <scm>
-        <developerConnection>scm:git:http://orion-exp-git-1.zsi.agri/agrilab/ift-api.git</developerConnection>
-        <tag>ift-api-0.8.ctrl</tag>
+        <developerConnection>scm:svn:https://scm.forge.national.agri/dal/externe/ift/ift-api/branches/ift-api-1.6-patches</developerConnection>
     </scm>
 
     <distributionManagement>
         <repository>
             <id>Project</id>
             <name>Maven Repository</name>
-            <url>dav:https://repos.forge.agriculture/repository/ift-work</url>
+            <url>dav:https://repos.forge.agriculture/repository/ift-private</url>
         </repository>
 
         <snapshotRepository>
             <id>Work</id>
             <name>Maven Internal Repository</name>
-            <url>dav:https://repos.forge.agriculture/repository/ift-work</url>
+            <url>dav:https://repos.forge.agriculture/repository/ift-private</url>
         </snapshotRepository>
     </distributionManagement>
 
@@ -301,94 +340,10 @@
                         </directory>
                         <includes>
                             <include>*.properties</include>
-                            <include>db/migration/*.sql</include>
                         </includes>
                     </resource>
                 </resources>
             </build>
-        </profile>
-
-        <!-- Profil de l'environnement de CTRL -->
-        <profile>
-            <id>ctrl</id>
-            <build>
-                <resources>
-                    <resource>
-                        <filtering>false</filtering>
-                        <directory>
-                            src/main/config/env/ctrl
-                        </directory>
-                        <includes>
-                            <include>*.properties</include>
-                            <include>db/migration/*.sql</include>
-                        </includes>
-                    </resource>
-                </resources>
-            </build>
-        </profile>
-
-        <!-- Profil de l'environnement PPRD -->
-        <profile>
-            <id>pprd</id>
-            <build>
-                <resources>
-                    <resource>
-                        <filtering>false</filtering>
-                        <directory>
-                            src/main/config/env/private/pprd
-                        </directory>
-                        <includes>
-                            <include>*.properties</include>
-                            <include>db/migration/*.sql</include>
-                        </includes>
-                    </resource>
-                </resources>
-            </build>
-            <distributionManagement>
-                <repository>
-                    <id>Project</id>
-                    <name>Maven Repository</name>
-                    <url>dav:https://repos.forge.agriculture/repository/ift-private</url>
-                </repository>
-
-                <snapshotRepository>
-                    <id>Work</id>
-                    <name>Maven Internal Repository</name>
-                    <url>dav:https://repos.forge.agriculture/repository/ift-private</url>
-                </snapshotRepository>
-            </distributionManagement>
-        </profile>
-
-        <!-- Profil de l'environnement de production -->
-        <profile>
-            <id>prod</id>
-            <build>
-                <resources>
-                    <resource>
-                        <filtering>false</filtering>
-                        <directory>
-                            src/main/config/env/private/prod
-                        </directory>
-                        <includes>
-                            <include>*.properties</include>
-                            <include>db/migration/*.sql</include>
-                        </includes>
-                    </resource>
-                </resources>
-            </build>
-            <distributionManagement>
-                <repository>
-                    <id>Project</id>
-                    <name>Maven Repository</name>
-                    <url>dav:https://repos.forge.agriculture/repository/ift-private</url>
-                </repository>
-
-                <snapshotRepository>
-                    <id>Work</id>
-                    <name>Maven Internal Repository</name>
-                    <url>dav:https://repos.forge.agriculture/repository/ift-private</url>
-                </snapshotRepository>
-            </distributionManagement>
         </profile>
 
         <profile>
@@ -402,7 +357,6 @@
                         </directory>
                         <includes>
                             <include>*.properties</include>
-                            <include>db/migration/*.sql</include>
                         </includes>
                     </resource>
                 </resources>
