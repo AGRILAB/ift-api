@@ -5,14 +5,14 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
-
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class TotalBilan {
+public class BilanParcelleCultivee {
 
-    private BigDecimal herbicide = new BigDecimal("0");
-    private BigDecimal horsHerbicide = new BigDecimal("0");
+    private ParcelleCultivee parcelleCultivee;
+
+    private BilanParSegment bilanParSegment;
+
 }

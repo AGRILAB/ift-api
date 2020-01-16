@@ -3,6 +3,7 @@ package fr.gouv.agriculture.ift.controller;
 import com.fasterxml.jackson.annotation.JsonView;
 import fr.gouv.agriculture.ift.Constants;
 import fr.gouv.agriculture.ift.controller.form.CibleForm;
+import fr.gouv.agriculture.ift.dto.WarningDTO;
 import fr.gouv.agriculture.ift.exception.InvalidBindingEntityException;
 import fr.gouv.agriculture.ift.model.Cible;
 import fr.gouv.agriculture.ift.service.CibleService;
@@ -40,10 +41,10 @@ public class AdminCibleController {
     @ApiOperation(hidden = true, value = "addCibles", notes = "Ajout de cibles avec un fichier CSV")
     @JsonView(Views.ExtendedPublic.class)
     @PostMapping(CIBLES + CSV)
-    @ResponseStatus(code = HttpStatus.NO_CONTENT)
-    public void addCibles(HttpServletRequest request) throws IOException, ServletException {
+    public WarningDTO addCibles(HttpServletRequest request) throws IOException, ServletException {
         InputStream inputStream = request.getPart("file").getInputStream();
-        cibleService.addCibles(inputStream);
+        String warningMessage = cibleService.addCibles(inputStream);
+        return WarningDTO.builder().message(warningMessage).build();
     }
 
     @ApiOperation(hidden = true, value = "createCible", notes = "Ajout d'une cible")
@@ -84,22 +85,23 @@ public class AdminCibleController {
 
     @ApiOperation(hidden = true, value = "findAllCibles", notes = "Retourne la liste des cibles")
     @ApiImplicitParams({
-            @ApiImplicitParam(name = "page", dataType = "integer", paramType = "query",
+            @ApiImplicitParam(name = "page", dataType = "int", paramType = "query",
                     value = "Page de résultats à récupérer (0 par défaut)."),
-            @ApiImplicitParam(name = "size", dataType = "integer", paramType = "query",
-                    value = "Nombre de résultats par page (200 par défaut).")
+            @ApiImplicitParam(name = "size", dataType = "int", paramType = "query",
+                    value = "Nombre de résultats par page (200 par défaut, max 2000).")
     })
     @JsonView(Views.ExtendedPublic.class)
     @GetMapping(CIBLES)
+    @ResponseStatus(code = HttpStatus.PARTIAL_CONTENT)
     public List<Cible> findAllCibles(@ApiParam(value = "Identifiant métier de la campagne")
                                      @RequestParam(value = "campagneIdMetier", required = false) String campagneIdMetier,
                                      @ApiParam(value = "Identifiant métier de la culture")
                                      @RequestParam(value = "cultureIdMetier", required = false) String cultureIdMetier,
                                      @ApiParam(value = "Identifiant métier du numéro Amm")
-                                     @RequestParam(value = "numeroAmmIdMetier", required = false) String numeroAmmIdMetier,
+                                     @RequestParam(value = "numeroAmmIdMetier", required = false) String[] numeroAmmIdMetier,
                                      @ApiParam(value = "Filtre sur le libellé de la cible")
                                      @RequestParam(value = "filtre", required = false) String filtre,
                                      @PageableDefault(page= 0, value = 200) Pageable pageable) {
-        return cibleService.findCibles(campagneIdMetier, numeroAmmIdMetier, cultureIdMetier, filtre, pageable);
+        return cibleService.findCibles(campagneIdMetier, cultureIdMetier, numeroAmmIdMetier, filtre, pageable);
     }
 }

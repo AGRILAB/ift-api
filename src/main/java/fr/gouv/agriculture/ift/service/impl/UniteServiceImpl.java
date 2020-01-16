@@ -1,6 +1,7 @@
 package fr.gouv.agriculture.ift.service.impl;
 
 import fr.gouv.agriculture.ift.controller.form.UniteForm;
+import fr.gouv.agriculture.ift.exception.ConflictException;
 import fr.gouv.agriculture.ift.exception.InvalidParameterException;
 import fr.gouv.agriculture.ift.exception.NotFoundException;
 import fr.gouv.agriculture.ift.model.Unite;
@@ -11,6 +12,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheConfig;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -26,20 +29,17 @@ public class UniteServiceImpl implements UniteService {
     private UniteRepository repository;
 
     @Override
-    @Cacheable(key = "#root.methodName")
     public List<Unite> findAllUnites() {
         log.debug("Get All Unites");
-        return repository.findAll();
+        return repository.findAll(new Sort(Sort.Direction.ASC, "libelle"));
     }
 
     @Override
-    @Cacheable(key = "#root.methodName + '_' + #id")
     public Unite findUniteById(UUID id) {
         return findUniteById(id, null);
     }
 
     @Override
-    @Cacheable(key = "#root.methodName + '_' + #id")
     public Unite findUniteById(UUID id, Class<? extends Throwable> throwableClass) {
         log.debug("Get Unite by Id: {}", id.toString());
         Unite found = repository.findOne(id);
@@ -55,20 +55,18 @@ public class UniteServiceImpl implements UniteService {
     }
 
     @Override
-    @Cacheable(key = "#root.methodName + '_' + #idMetier")
     public Unite findUniteByIdMetier(String idMetier) {
         return findUniteByIdMetier(idMetier, null);
     }
 
     @Override
-    @Cacheable(key = "#root.methodName + '_' + #idMetier")
     public Unite findUniteByIdMetier(String idMetier, Class<? extends Throwable> throwableClass) {
         log.debug("Get Unite by IdMetier: {}", idMetier);
         Unite found = repository.findUniteByIdMetier(idMetier);
 
         if (found == null) {
             if (InvalidParameterException.class.equals(throwableClass)){
-                throw new InvalidParameterException("L'unité ayant pour id métier" + idMetier + " n'existe pas.");
+                throw new InvalidParameterException("L'unité ayant pour id métier " + idMetier + " n'existe pas.");
             }
             throw new NotFoundException();
         } else {
@@ -77,7 +75,16 @@ public class UniteServiceImpl implements UniteService {
     }
 
     @Override
+    @Cacheable(key = "#root.methodName + '_' + #idMetier")
+    public Unite findUniteByIdMetierWithCache(String idMetier, Class<? extends Throwable> throwableClass) {
+        System.out.println("Unite : " + idMetier);
+        return findUniteByIdMetier(idMetier, throwableClass);
+    }
+
     @CacheEvict(allEntries = true)
+    public void cleanCache() { }
+
+    @Override
     public Unite save(UniteForm uniteForm) {
         Unite newUnite = UniteForm.mapToUnite(uniteForm);
         Unite found = repository.findUniteByIdMetier(newUnite.getIdMetier());
@@ -91,17 +98,13 @@ public class UniteServiceImpl implements UniteService {
             newUnite.setId(UUID.randomUUID());
             log.debug("Create Unite: {}", newUnite);
         } else {
-            newUnite.setId(found.getId());
-            newUnite.setDateCreation(found.getDateCreation());
-            newUnite.setDateDerniereMaj(LocalDateTime.now());
-            log.debug("Update Unite: {}", newUnite);
+            throw newConflictException(newUnite);
         }
 
         return repository.save(newUnite);
     }
 
     @Override
-    @CacheEvict(allEntries = true)
     public Unite updateById(UUID id, UniteForm uniteForm) {
         Unite found = repository.findOne(id);
 
@@ -119,12 +122,16 @@ public class UniteServiceImpl implements UniteService {
             unite.setDateCreation(found.getDateCreation());
             unite.setDateDerniereMaj(LocalDateTime.now());
             log.debug("Update Unite: {}", unite);
-            return repository.save(unite);
+
+            try{
+                return repository.save(unite);
+            } catch (DataIntegrityViolationException e) {
+                throw newConflictException(unite);
+            }
         }
     }
 
     @Override
-    @CacheEvict(allEntries = true)
     public void delete(UUID id) {
         log.debug("Delete Unite: {}", id);
         Unite found = repository.findOne(id);
@@ -133,6 +140,10 @@ public class UniteServiceImpl implements UniteService {
         } else {
             repository.delete(id);
         }
+    }
+
+    private ConflictException newConflictException(Unite unite){
+        return new ConflictException("L'unité avec l'identifiant " + unite.getIdMetier() + " existe déjà.");
     }
 
 }

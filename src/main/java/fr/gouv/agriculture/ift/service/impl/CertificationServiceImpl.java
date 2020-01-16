@@ -1,125 +1,139 @@
 package fr.gouv.agriculture.ift.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import fr.gouv.agriculture.ift.exception.InvalidParameterException;
+import fr.gouv.agriculture.ift.exception.ServerException;
+import fr.gouv.agriculture.ift.model.Certificat;
+import fr.gouv.agriculture.ift.model.IftTraitement;
+import fr.gouv.agriculture.ift.model.Signature;
 import fr.gouv.agriculture.ift.service.CertificationService;
+import fr.gouv.agriculture.ift.service.CertificatService;
+import fr.gouv.agriculture.ift.util.Views;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.impl.TextCodec;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import sun.security.provider.X509Factory;
 
-import javax.xml.bind.DatatypeConverter;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.security.*;
-import java.security.cert.CertificateEncodingException;
+import java.io.InputStream;
+import java.security.GeneralSecurityException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 
-import static java.security.KeyStore.getInstance;
+import static fr.gouv.agriculture.ift.Constants.JWT_KID_PARAM;
 
 @Slf4j
 @Service
 public class CertificationServiceImpl implements CertificationService {
 
-    public static final String PKCS_12 = "PKCS12";
-
-    public static final String CLAIM = "signature";
-
-    @Value("${security.keystore.file}")
-    private String keystore;
-
-    @Value("${security.keystore.password}")
-    private String keystorePassword;
-
-    @Value("${security.keystore.certificate.name}")
-    private String certificateName;
+    @Autowired
+    CertificatService certificatService;
 
     @Autowired
-    private ObjectMapper objectMapper;
+    @Qualifier("signaturePrivateKey")
+    PrivateKey privateKey;
 
-    @Override
-    public String hash(String toBeHashed) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] encodedhash = digest.digest(toBeHashed.getBytes(StandardCharsets.UTF_8));
+    @Autowired
+    @Qualifier("signatureX509Certificate")
+    X509Certificate certificate;
 
-            StringBuffer hexString = new StringBuffer();
-            for (int i = 0; i < encodedhash.length; i++) {
-                String hex = Integer.toHexString(0xff & encodedhash[i]);
-                if (hex.length() == 1) hexString.append('0');
-                hexString.append(hex);
-            }
-            return hexString.toString();
-        } catch (NoSuchAlgorithmException e) {
-            e.printStackTrace();
-            return null;
-        }
+    CertificateFactory cf;
+
+    private ObjectMapper oldObjectMapper;
+    private ObjectMapper newObjectMapper;
+
+    CertificationServiceImpl() throws CertificateException {
+
+        cf = CertificateFactory.getInstance("X.509");
+
+        newObjectMapper = new ObjectMapper();
+        newObjectMapper.registerModule(new JavaTimeModule());
+        DateFormat newDateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+        newObjectMapper.setDateFormat(newDateFormat);
+
+        oldObjectMapper = new ObjectMapper();
+        oldObjectMapper.registerModule(new JavaTimeModule());
+
     }
 
     @Override
-    public String sign(String toBeSigned) throws IOException, GeneralSecurityException {
-        PrivateKey privateKey = getPrivateKey();
+    public String sign(IftTraitement ift) throws IOException, GeneralSecurityException {
+
+        String serializedIft = this.newObjectMapper
+                .writerWithView(Views.Public.class)
+                .writeValueAsString(ift);
+
+        String kid = certificatService.getCertificatThumbprint(certificate);
+
         return Jwts.builder()
-                .claim(CLAIM, toBeSigned)
+                .setHeaderParam(JWT_KID_PARAM, kid)
+                .setPayload(serializedIft)
                 .signWith(SignatureAlgorithm.RS256, privateKey)
                 .compact();
     }
 
     @Override
-    public String verify(String savedData, String givenSignature, PublicKey publicKey) throws IOException {
+    public IftTraitement verify(String givenSignature, PublicKey publicKey) throws IOException {
         try {
-            Jws<Claims> claims = Jwts.parser()
+            Jws<Claims> jws = Jwts.parser()
                     .setSigningKey(publicKey).parseClaimsJws(givenSignature);
 
-            String hashedSignedData = claims.getBody().get(CLAIM, String.class);
-            String hashedSavedData = hash(savedData);
-            if (hashedSignedData.equals(hashedSavedData)) {
-                return savedData;
-            } else {
-                throw new InvalidParameterException("L'IFT n'est pas valide.");
+            //Old way of encoding payload in signature
+            String payload = jws.getBody().get("signature", String.class);
+
+            if (payload == null){
+                //New way of encoding payload in signature
+                String base64UrlEncodedPayload = givenSignature.substring(givenSignature.indexOf('.') + 1,
+                        givenSignature.length());
+                payload = TextCodec.BASE64URL.decodeToString(base64UrlEncodedPayload);
+
+                return newObjectMapper.readValue(payload, IftTraitement.class);
+            }else {
+                //For compatibility reasons with existing signatures
+                return oldObjectMapper.readValue(payload, IftTraitement.class);
             }
+
+
         } catch (Exception e) {
+            log.error("La signature fournie n'est pas valide", e);
             throw new InvalidParameterException("La signature fournie n'est pas valide.");
         }
     }
 
-    private PrivateKey getPrivateKey() throws IOException, GeneralSecurityException {
-        KeyStore keyStore = getKeyStore();
-        return (PrivateKey) keyStore.getKey(certificateName, keystorePassword.toCharArray());
-    }
-
-    private KeyStore getKeyStore() {
+    @Override
+    public IftTraitement verify(Signature signature) throws IOException {
         try {
-            KeyStore keyStore = getInstance(PKCS_12);
-            keyStore.load(getClass().getClassLoader().getResourceAsStream(keystore), keystorePassword.toCharArray());
-            return keyStore;
-        } catch (Exception e) {
-            log.error(e.getMessage());
-            throw new RuntimeException("An error occurred while loading keystore.");
+            Certificate cert = getCertificate(signature.getCertificat());
+            return verify(signature.getSignature(), cert.getPublicKey());
+        }catch (CertificateException e){
+            log.error("Erreur lors de la vérification de la signature", e);
+            throw new ServerException("Erreur lors de la vérification de la signature");
         }
     }
 
     @Override
-    public X509Certificate getCertificate() throws IOException {
-        try {
-            KeyStore keyStore = getKeyStore();
-            return (X509Certificate) keyStore.getCertificate(certificateName);
-        } catch (KeyStoreException e) {
-            log.error(e.getMessage());
-        }
-        return null;
+    public X509Certificate getCertificate(Certificat certificat) throws CertificateException {
+
+        String publicKey = certificat.getCert().replaceAll(X509Factory.BEGIN_CERT, "").replaceAll(X509Factory.END_CERT, "");
+
+        byte[] publicBytes = java.util.Base64.getDecoder().decode(publicKey);
+        InputStream is = new ByteArrayInputStream(publicBytes);
+
+        return (X509Certificate) cf.generateCertificate(is);
     }
 
-    @Override
-    public String getClePublique() throws CertificateEncodingException, IOException {
-        X509Certificate certificate = getCertificate();
-        String pemCertPre = DatatypeConverter.printBase64Binary(certificate.getEncoded());
-        String pemCert = X509Factory.BEGIN_CERT + pemCertPre + X509Factory.END_CERT;
-        return pemCert;
-    }
 }

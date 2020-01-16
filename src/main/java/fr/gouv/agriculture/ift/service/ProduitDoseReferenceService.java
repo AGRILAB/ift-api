@@ -9,6 +9,6 @@ import java.util.List;
 public interface ProduitDoseReferenceService {
 
     List<ProduitDoseReference> findProduitsDosesReferenceByCampagneAndCultureAndProduitAndNumeroAmmAndCible(
-            String campagneIdMetier, String cultureIdMetier, String produitLibelle, String numeroAmmIdMetier, String cibleIdMetier, TypeDoseReference typeDoseReference, Boolean biocontrole, Pageable pageable);
+            String campagneIdMetier, String cultureIdMetier, String produitLibelle, String[] numeroAmmIdMetier, String cibleIdMetier, TypeDoseReference typeDoseReference, Boolean biocontrole, Pageable pageable);
 
 }

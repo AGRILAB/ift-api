@@ -3,6 +3,7 @@ package fr.gouv.agriculture.ift.controller;
 import com.fasterxml.jackson.annotation.JsonView;
 import fr.gouv.agriculture.ift.Constants;
 import fr.gouv.agriculture.ift.controller.form.ProduitForm;
+import fr.gouv.agriculture.ift.dto.WarningDTO;
 import fr.gouv.agriculture.ift.exception.InvalidBindingEntityException;
 import fr.gouv.agriculture.ift.exception.InvalidParameterException;
 import fr.gouv.agriculture.ift.exception.NotFoundException;
@@ -31,7 +32,6 @@ import java.util.UUID;
 
 import static fr.gouv.agriculture.ift.Constants.CSV;
 import static fr.gouv.agriculture.ift.Constants.PRODUITS;
-import static fr.gouv.agriculture.ift.Constants.VALIDITES_PRODUITS;
 
 @Slf4j
 @RestController
@@ -47,15 +47,16 @@ public class AdminProduitController {
 
     @ApiOperation(hidden = true, value = "addProduits", notes = "Ajout des produits avec un fichier CSV")
     @JsonView(Views.ExtendedPublic.class)
-    @PostMapping(value = VALIDITES_PRODUITS + CSV)
-    public void addProduits(@ApiParam(value = "Identification de la campagne", required = true)
+    @PostMapping(value = PRODUITS + CSV)
+    public WarningDTO addProduits(@ApiParam(value = "Identification de la campagne", required = true)
                                         @RequestParam(value = "campagneIdMetier") String campagneIdMetier,
-                                         HttpServletRequest request) throws IOException, ServletException {
+                                  HttpServletRequest request) throws IOException, ServletException {
         InputStream inputStream = request.getPart("file").getInputStream();
         try {
             Campagne campagne = campagneService.findCampagneByIdMetier(campagneIdMetier);
             produitService.deleteValiditeProduitByCampagne(campagne);
-            produitService.addProduits(campagne, inputStream);
+            String warningMessage = produitService.addProduits(campagne, inputStream);
+            return WarningDTO.builder().message(warningMessage).build();
         } catch (NotFoundException ex) {
             throw new InvalidParameterException("La campagne ayant pour id métier " + campagneIdMetier + " n'existe pas.");
         }
@@ -63,7 +64,7 @@ public class AdminProduitController {
 
     @ApiOperation(hidden = true, value = "createProduit", notes = "Ajout d'un produit")
     @JsonView(Views.ExtendedPublic.class)
-    @PostMapping(value = VALIDITES_PRODUITS, consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PostMapping(value = PRODUITS, consumes = MediaType.APPLICATION_JSON_VALUE)
     @ResponseStatus(code = HttpStatus.CREATED)
     public Produit createProduit(@ApiParam(value = "Produit", required = true)
                                      @RequestBody @Valid ProduitForm produitForm,
@@ -76,7 +77,7 @@ public class AdminProduitController {
 
     @ApiOperation(hidden = true, value = "updateProduit", notes = "Modification d'un produit")
     @JsonView(Views.ExtendedPublic.class)
-    @PutMapping(value = VALIDITES_PRODUITS + "/{produitId}", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PutMapping(value = PRODUITS + "/{produitId}", consumes = MediaType.APPLICATION_JSON_VALUE)
     public Produit updateProduit(@ApiParam(value = "Identification du produit", required = true)
                                      @PathVariable UUID produitId,
                                      @ApiParam(value = "Produit", required = true)
@@ -90,7 +91,7 @@ public class AdminProduitController {
 
     @ApiOperation(hidden = true, value = "deleteProduit", notes = "Suppression d'un produit")
     @JsonView(Views.ExtendedPublic.class)
-    @DeleteMapping(VALIDITES_PRODUITS + "/{produitId}")
+    @DeleteMapping(PRODUITS + "/{produitId}")
     @ResponseStatus(code = HttpStatus.NO_CONTENT)
     public void deleteProduit(@ApiParam(value = "Identification du produit", required = true)
                                 @PathVariable UUID produitId) {
@@ -99,13 +100,14 @@ public class AdminProduitController {
 
     @ApiOperation(hidden = true, value = "findAllProduits", notes = "Retourne la liste des produits")
     @ApiImplicitParams({
-            @ApiImplicitParam(name = "page", dataType = "integer", paramType = "query",
+            @ApiImplicitParam(name = "page", dataType = "int", paramType = "query",
                     value = "Page de résultats à récupérer (0 par défaut)."),
-            @ApiImplicitParam(name = "size", dataType = "integer", paramType = "query",
-                    value = "Nombre de résultats par page (200 par défaut).")
+            @ApiImplicitParam(name = "size", dataType = "int", paramType = "query",
+                    value = "Nombre de résultats par page (200 par défaut, max 2000).")
     })
     @JsonView(Views.ExtendedPublic.class)
     @GetMapping(PRODUITS)
+    @ResponseStatus(code = HttpStatus.PARTIAL_CONTENT)
     public List<Produit> findAllProduits(@ApiParam(value = "Identifiant métier de la campagne")
                                                   @RequestParam(value = "campagneIdMetier", required = false) String campagneIdMetier,
                                                   @ApiParam(value = "Identifiant métier de la culture")
@@ -117,5 +119,6 @@ public class AdminProduitController {
                                                   @PageableDefault(page= 0, value = 200) Pageable pageable) {
 
         return produitService.findProduits(campagneIdMetier, cultureIdMetier, cibleIdMetier, filtre, pageable);
+
     }
 }

@@ -1,6 +1,8 @@
 package fr.gouv.agriculture.ift.service.impl;
 
+import fr.gouv.agriculture.ift.controller.csv.CibleCSV;
 import fr.gouv.agriculture.ift.controller.form.CibleForm;
+import fr.gouv.agriculture.ift.exception.ConflictException;
 import fr.gouv.agriculture.ift.exception.InvalidParameterException;
 import fr.gouv.agriculture.ift.exception.NotFoundException;
 import fr.gouv.agriculture.ift.model.Cible;
@@ -9,12 +11,14 @@ import fr.gouv.agriculture.ift.model.enumeration.TypeDoseReference;
 import fr.gouv.agriculture.ift.repository.CibleRepository;
 import fr.gouv.agriculture.ift.repository.DoseReferencePredicateBuilder;
 import fr.gouv.agriculture.ift.service.CibleService;
+import fr.gouv.agriculture.ift.util.CsvUtils;
 import fr.gouv.agriculture.ift.util.StringHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheConfig;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -49,20 +53,25 @@ public class CibleServiceImpl implements CibleService {
     private static final Sort SORT = new Sort(Sort.Direction.ASC, "libelle");
 
     @Override
-    public List<Cible> findCibles(String campagneIdMetier, String numeroAmmIdMetier, String cultureIdMetier, String filtre, Pageable pageable) {
+    public List<Cible> findCibles(String campagneIdMetier, String cultureIdMetier, String[] numeroAmmIdMetier, String filtre, Pageable pageable) {
+        List<Cible> cibles;
         if (!StringUtils.isEmpty(campagneIdMetier) ||
                 !StringUtils.isEmpty(numeroAmmIdMetier) ||
                 !StringUtils.isEmpty(cultureIdMetier)) {
-            return findCiblesByCampagneAndCultureAndOrNumeroAmm(campagneIdMetier, cultureIdMetier, numeroAmmIdMetier, filtre, pageable);
+            cibles = findCiblesByCampagneAndCultureAndOrNumeroAmm(campagneIdMetier, cultureIdMetier, numeroAmmIdMetier, filtre, pageable);
         } else if (!StringUtils.isEmpty(filtre)){
-            return findAllCibles(filtre, pageable);
+            cibles = findAllCibles(filtre, pageable);
         } else {
-            return findAllCibles(pageable);
+            cibles = findAllCibles(pageable);
         }
+
+        if (cibles.size() == 0){
+            throw new NotFoundException();
+        }
+        return cibles;
     }
 
     @Override
-    @Cacheable(key = "#root.methodName")
     public List<Cible> findAllCibles() {
         log.debug("Get All Cibles");
         return repository.findAll(SORT);
@@ -82,33 +91,46 @@ public class CibleServiceImpl implements CibleService {
     @Override
     public List<Cible> findAllCibles(String filter, Pageable pageable) {
         String normalizedFilter = StringHelper.normalizeTerm(filter);
-        return repository.findCibleByNormalizedLibelleStartingWithOrNormalizedLibelleContainingOrderByLibelleAsc(normalizedFilter, " " + normalizedFilter, pageable);
+        return repository.findCibleByNormalizedLibelleStartingWithOrNormalizedLibelleContainingOrIdMetierStartingWithOrderByLibelleAsc(normalizedFilter, " " + normalizedFilter, normalizedFilter, pageable);
     }
 
-    public List<Cible> findCiblesByCampagneAndCultureAndOrNumeroAmm(String campagneIdMetier, String cultureIdMetier, String numeroAmmIdMetier, String filtre, Pageable pageable) {
+    @Override
+    public String findAllCiblesAsCSV() {
+        List<Cible> cibles = repository.findAll(SORT);
+        return CsvUtils.writeAsCSV(CibleCSV.class, CibleCSV.toCsvDTO(cibles).toArray());
+    }
+
+    public List<Cible> findCiblesByCampagneAndCultureAndOrNumeroAmm(String campagneIdMetier, String cultureIdMetier, String[] numeroAmmIdMetier, String filtre, Pageable pageable) {
         log.debug("Get All Cibles by Campagne And Culture And/Or NumeroAmm: {}", campagneIdMetier, cultureIdMetier, numeroAmmIdMetier);
 
         CriteriaBuilder builder = entityManager.getCriteriaBuilder();
+
         CriteriaQuery<Cible> query = builder.createQuery(Cible.class);
-        Root<DoseReference> root = query.from(DoseReference.class);
+        Root<Cible> fromCible = query.from(Cible.class);
 
-        DoseReferencePredicateBuilder predicateBuilder = new DoseReferencePredicateBuilder(builder, root);
-        Predicate predicate = predicateBuilder.appendPredicate(builder.conjunction(), campagneIdMetier, numeroAmmIdMetier, cultureIdMetier, null, TypeDoseReference.cible, null);
+        Subquery doseRefQuery = query.subquery(DoseReference.class);
+        Root<DoseReference> fromDoseRef = doseRefQuery.from(DoseReference.class);
 
-        Path<Cible> cibleType = root.get("cible");
-        Path<String> libellePath = cibleType.get("libelle");
-        Path<String> normalizedLibellePath = cibleType.get("normalizedLibelle");
+        DoseReferencePredicateBuilder predicateBuilder = new DoseReferencePredicateBuilder(builder, fromDoseRef);
+        Predicate doseRefPredicate = predicateBuilder.appendPredicate(builder.conjunction(), campagneIdMetier, numeroAmmIdMetier, cultureIdMetier, null, TypeDoseReference.cible, null);
+
+        doseRefQuery.select(fromDoseRef.get("cible"));
+        doseRefQuery.where(doseRefPredicate);
+
+        Predicate ciblePredicate = builder.in(fromCible.get("id")).value(doseRefQuery);
+        Path<String> libellePath = fromCible.get("libelle");
+        Path<String> normalizedLibellePath = fromCible.get("normalizedLibelle");
+        Path<String> idMetierPath = fromCible.get("idMetier");
 
         if (!StringUtils.isEmpty(filtre)){
             String normalizedFilter = StringHelper.normalizeTerm(filtre);
             Predicate filterPredicate = builder.or(builder.like(normalizedLibellePath, normalizedFilter + '%'),
-                    builder.like(normalizedLibellePath, "% " + normalizedFilter + "%"));
-            predicate = builder.and(predicate, filterPredicate);
+                    builder.like(normalizedLibellePath, "% " + normalizedFilter + "%"),
+                    builder.like(idMetierPath, normalizedFilter + "%"));
+            ciblePredicate = builder.and(ciblePredicate, filterPredicate);
         }
 
-        query.where(predicate);
-
-        query.select(cibleType).distinct(true);
+        query.where(ciblePredicate);
         query.orderBy(builder.asc(libellePath));
 
         TypedQuery<Cible> typedQuery = entityManager.createQuery(query);
@@ -121,13 +143,11 @@ public class CibleServiceImpl implements CibleService {
     }
 
     @Override
-    @Cacheable(key = "#root.methodName + '_' + #id")
     public Cible findCibleById(UUID id) {
         return findCibleById(id, null);
     }
 
     @Override
-    @Cacheable(key = "#root.methodName + '_' + #id")
     public Cible findCibleById(UUID id, Class<? extends Throwable> throwableClass) {
         log.debug("Get Cible by Id: {}", id.toString());
         Cible found = repository.findOne(id);
@@ -143,13 +163,11 @@ public class CibleServiceImpl implements CibleService {
     }
 
     @Override
-    @Cacheable(key = "#root.methodName + '_' + #idMetier")
     public Cible findCibleByIdMetier(String idMetier) {
         return findCibleByIdMetier(idMetier, null);
     }
 
     @Override
-    @Cacheable(key = "#root.methodName + '_' + #idMetier")
     public Cible findCibleByIdMetier(String idMetier, Class<? extends Throwable> throwableClass) {
         log.debug("Get Cible by IdMetier: {}", idMetier);
         Cible found = repository.findCibleByIdMetier(idMetier);
@@ -165,8 +183,33 @@ public class CibleServiceImpl implements CibleService {
     }
 
     @Override
+    @Cacheable(key = "#root.methodName + '_' + #idMetier")
+    public Cible findCibleByIdMetierWithCache(String idMetier, Class<? extends Throwable> throwableClass) {
+        return findCibleByIdMetier(idMetier, throwableClass);
+    }
+
     @CacheEvict(allEntries = true)
+    public void cleanCache() { }
+
+    @Override
     public Cible save(CibleForm cibleForm) {
+        Cible cible = CibleForm.mapToCible(cibleForm);
+        Cible found = repository.findCibleByIdMetier(cible.getIdMetier());
+
+        if (found == null) {
+            cible.setId(UUID.randomUUID());
+            log.debug("Create Cible: {}", cible);
+        } else {
+            throw newConflictException(cible);
+        }
+
+        cible.setNormalizedLibelle(StringHelper.normalizeTerm(cible.getLibelle()));
+
+        return repository.save(cible);
+    }
+
+    @Override
+    public Cible saveOrUpdate(CibleForm cibleForm) {
         Cible cible = CibleForm.mapToCible(cibleForm);
         Cible found = repository.findCibleByIdMetier(cible.getIdMetier());
 
@@ -186,7 +229,6 @@ public class CibleServiceImpl implements CibleService {
     }
 
     @Override
-    @CacheEvict(allEntries = true)
     public Cible updateById(UUID id, CibleForm cibleForm) {
         Cible found = repository.findOne(id);
 
@@ -199,12 +241,16 @@ public class CibleServiceImpl implements CibleService {
             cible.setDateDerniereMaj(LocalDateTime.now());
             cible.setNormalizedLibelle(StringHelper.normalizeTerm(cible.getLibelle()));
             log.debug("Update Cible: {}", cible);
-            return repository.save(cible);
+
+            try {
+                return repository.save(cible);
+            } catch (DataIntegrityViolationException e) {
+                throw newConflictException(cible);
+            }
         }
     }
 
     @Override
-    @CacheEvict(allEntries = true)
     public void delete(UUID id) {
         log.debug("Delete Cible: {}", id);
         Cible found = repository.findOne(id);
@@ -216,8 +262,7 @@ public class CibleServiceImpl implements CibleService {
     }
 
     @Override
-    @CacheEvict(allEntries = true)
-    public List<Cible> addCibles(InputStream inputStream) {
+    public String addCibles(InputStream inputStream) {
         try {
             InputStreamReader inputStreamReader = new InputStreamReader(inputStream, StandardCharsets.UTF_8);
             BufferedReader bufferedReader = new BufferedReader(inputStreamReader);
@@ -225,6 +270,7 @@ public class CibleServiceImpl implements CibleService {
             String[] splitData = crunchifyLine.split("\\t");
             Map<String, Integer> columns = new HashMap<>();
             for (int i = 0; i < splitData.length; i++) {
+                splitData[i] = StringHelper.removeDoubleQuotes(splitData[i]);
                 switch (splitData[i]) {
                     case code:
                         columns.put(code, i);
@@ -241,10 +287,10 @@ public class CibleServiceImpl implements CibleService {
 
             while ((crunchifyLine = bufferedReader.readLine()) != null) {
                 CibleForm cible = crunchifyCSVtoArrayList(crunchifyLine, columns);
-                Cible saved = save(cible);
+                Cible saved = saveOrUpdate(cible);
                 cibles.add(saved);
             }
-            return cibles;
+            return cibles.size() + " cibles ont été ajoutées ou mises à jour.\n";
         } catch (IOException e) {
             e.printStackTrace();
             return null;
@@ -256,11 +302,14 @@ public class CibleServiceImpl implements CibleService {
         if (crunchifyCSV != null) {
             String[] splitData = crunchifyCSV.split("\\t");
             return CibleForm.builder()
-                    .idMetier(splitData[columns.get(code)])
-                    .libelle(splitData[columns.get(label)])
+                    .idMetier(StringHelper.removeDoubleQuotes(splitData[columns.get(code)]))
+                    .libelle(StringHelper.removeDoubleQuotes(splitData[columns.get(label)]))
                     .build();
         }
         return null;
     }
 
+    private ConflictException newConflictException(Cible cible){
+        return new ConflictException("La cible avec l'identifiant " + cible.getIdMetier() + " existe déjà.");
+    }
 }

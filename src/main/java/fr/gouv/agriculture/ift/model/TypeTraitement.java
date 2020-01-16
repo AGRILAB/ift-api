@@ -4,8 +4,10 @@ import com.fasterxml.jackson.annotation.JsonView;
 import fr.gouv.agriculture.ift.util.Views;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.*;
+import org.hibernate.validator.constraints.NotEmpty;
 
-import javax.persistence.*;
+import javax.persistence.Entity;
+import javax.persistence.Id;
 import javax.validation.constraints.NotNull;
 import java.util.UUID;
 
@@ -15,28 +17,19 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(callSuper = false)
-public class SignedIftTraitement extends AbstractTimestampedEntity {
+public class TypeTraitement extends AbstractTimestampedEntity {
 
     @Id
     @ApiModelProperty(hidden = true)
     @JsonView(Views.ExtendedPublic.class)
     private UUID id;
 
-    @Transient
-    IftTraitement iftTraitement;
+    @NotEmpty
+    private String idMetier;
 
-    @ApiModelProperty(hidden = true)
-    @JsonView(Views.ExtendedPublic.class)
-    @Column(name = "ift_traitement")
-    @NotNull
-    private String iftTraitementJson;
+    @NotEmpty
+    private String libelle;
 
     @NotNull
-    private String signature;
-
-    @ApiModelProperty(hidden = true)
-    @JsonView(Views.ExtendedPublic.class)
-    @ManyToOne
-    @NotNull
-    private ClePublique clePublique;
+    private Boolean avantSemis;
 }

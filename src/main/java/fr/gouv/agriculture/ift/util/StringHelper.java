@@ -15,4 +15,11 @@ public class StringHelper {
     public static String normalizeTerm(String term) {
         return unaccent(term.toUpperCase());
     }
+
+    public static String removeDoubleQuotes(String text) {
+        if (!text.isEmpty() && text.charAt(0) == '"' && text.charAt(text.length() - 1) == '"') {
+            text = text.substring(1, text.length()-1);
+        }
+        return text;
+    }
 }

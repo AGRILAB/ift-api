@@ -5,9 +5,7 @@ import fr.gouv.agriculture.ift.Constants;
 import fr.gouv.agriculture.ift.model.Segment;
 import fr.gouv.agriculture.ift.service.SegmentService;
 import fr.gouv.agriculture.ift.util.Views;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
+import io.swagger.annotations.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -21,7 +19,7 @@ import java.util.List;
 @Slf4j
 @RestController
 @RequestMapping(value = Constants.API_SEGMENTS_ROOT, produces = MediaType.APPLICATION_JSON_VALUE)
-@Api(tags = {Constants.SEGMENTS}, description = "Ressources sur les segments")
+@Api(tags = {Constants.SEGMENTS}, description = "Référentiel des segments utilisés dans le bilan IFT")
 public class SegmentController {
 
     @Autowired
@@ -35,6 +33,9 @@ public class SegmentController {
     }
 
     @ApiOperation(value = "findSegmentByIdMetier", notes = "Retourne le segment par son identifiant métier")
+    @ApiResponses(value = {
+            @ApiResponse(code = 404, message = "Not Found")
+    })
     @JsonView(Views.Public.class)
     @GetMapping("/{segmentIdMetier}")
     public Segment findSegmentById(@ApiParam(value = "Identifiant métier du segment", required = true)

@@ -3,6 +3,7 @@ package fr.gouv.agriculture.ift.controller;
 import com.fasterxml.jackson.annotation.JsonView;
 import fr.gouv.agriculture.ift.Constants;
 import fr.gouv.agriculture.ift.controller.form.CultureForm;
+import fr.gouv.agriculture.ift.dto.WarningDTO;
 import fr.gouv.agriculture.ift.exception.InvalidBindingEntityException;
 import fr.gouv.agriculture.ift.model.Culture;
 import fr.gouv.agriculture.ift.service.CultureService;
@@ -25,7 +26,8 @@ import java.io.InputStream;
 import java.util.List;
 import java.util.UUID;
 
-import static fr.gouv.agriculture.ift.Constants.*;
+import static fr.gouv.agriculture.ift.Constants.CSV;
+import static fr.gouv.agriculture.ift.Constants.CULTURES;
 
 @Slf4j
 @RestController
@@ -39,10 +41,10 @@ public class AdminCultureController {
     @ApiOperation(hidden = true, value = "addCultures", notes = "Ajout de cultures avec un fichier CSV")
     @JsonView(Views.ExtendedPublic.class)
     @PostMapping(CULTURES + CSV)
-    @ResponseStatus(code = HttpStatus.NO_CONTENT)
-    public void addCultures(HttpServletRequest request) throws IOException, ServletException {
+    public WarningDTO addCultures(HttpServletRequest request) throws IOException, ServletException {
         InputStream inputStream = request.getPart("file").getInputStream();
-        cultureService.addCultures(inputStream);
+        String warningMessage = cultureService.addCultures(inputStream);
+        return WarningDTO.builder().message(warningMessage).build();
     }
 
     @ApiOperation(hidden = true, value = "createCulture", notes = "Ajout d'une culture")
@@ -83,22 +85,24 @@ public class AdminCultureController {
 
     @ApiOperation(hidden = true, value = "findAllCultures", notes = "Retourne la liste des cultures")
     @ApiImplicitParams({
-            @ApiImplicitParam(name = "page", dataType = "integer", paramType = "query",
+            @ApiImplicitParam(name = "page", dataType = "int", paramType = "query",
                     value = "Page de résultats à récupérer (0 par défaut)."),
-            @ApiImplicitParam(name = "size", dataType = "integer", paramType = "query",
-                    value = "Nombre de résultats par page (200 par défaut).")
+            @ApiImplicitParam(name = "size", dataType = "int", paramType = "query",
+                    value = "Nombre de résultats par page (200 par défaut, max 2000).")
     })
     @JsonView(Views.ExtendedPublic.class)
     @GetMapping(CULTURES)
+    @ResponseStatus(code = HttpStatus.PARTIAL_CONTENT)
     public List<Culture> findAllCultures(@ApiParam(value = "Identifiant métier de la campagne")
                                          @RequestParam(value = "campagneIdMetier", required = false) String campagneIdMetier,
                                          @ApiParam(value = "Identifiant métier du numéro Amm")
-                                         @RequestParam(value = "numeroAmmIdMetier", required = false) String numeroAmmIdMetier,
+                                         @RequestParam(value = "numeroAmmIdMetier", required = false) String[] numeroAmmIdMetier,
                                          @ApiParam(value = "Identifiant métier de la cible")
                                          @RequestParam(value = "cibleIdMetier", required = false) String cibleIdMetier,
                                          @ApiParam(value = "Filtre sur le libellé de la culture")
                                          @RequestParam(value = "filtre", required = false) String filtre,
                                          @PageableDefault(page= 0, value = 200) Pageable pageable) {
         return cultureService.findCultures(campagneIdMetier, numeroAmmIdMetier, cibleIdMetier, filtre, pageable);
+
     }
 }
