@@ -4,7 +4,7 @@
 
     <groupId>fr.gouv.agriculture</groupId>
     <artifactId>ift-api</artifactId>
-    <version>1.6.4-SNAPSHOT</version>
+    <version>2.0-m2-SNAPSHOT</version>
     <packaging>war</packaging>
 
     <name>ift-api</name>
@@ -213,7 +213,7 @@
     </dependencyManagement>
 
     <scm>
-        <developerConnection>scm:svn:https://scm.forge.national.agri/dal/externe/ift/ift-api/branches/ift-api-1.6-patches</developerConnection>
+        <developerConnection>scm:svn:https://scm.forge.national.agri/dal/externe/ift/ift-api/branches/ift-api-2.0-dal</developerConnection>
     </scm>
 
     <distributionManagement>
